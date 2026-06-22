@@ -58,7 +58,7 @@ export default function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
             <Image
-              src="/images/Pavati-Book-Logo.png"
+              src={isScrolled ? "/images/Pavati-Book-Logo.png" : "/images/Pavati-Book-Logo-White-Orange.png"}
               alt="PavtiBook Logo"
               width={180}
               height={48}
@@ -76,8 +76,14 @@ export default function Header() {
                 <Link
                   key={link.name}
                   href={link.href}
-                  className={`text-sm font-semibold transition-colors duration-200 hover:text-orange-brand ${
-                    isActive ? "text-maroon font-bold" : "text-neutral-700"
+                  className={`text-sm font-semibold transition-colors duration-200 ${
+                    isScrolled
+                      ? isActive
+                        ? "text-maroon font-bold"
+                        : "text-neutral-700 hover:text-orange-brand"
+                      : isActive
+                        ? "text-gold-brand font-bold"
+                        : "text-white/90 hover:text-gold-brand"
                   }`}
                 >
                   {link.name}
@@ -90,14 +96,22 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-4">
             <Link
               href="/download"
-              className="flex items-center gap-1.5 text-sm font-semibold text-maroon hover:text-orange-brand transition-colors duration-200"
+              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors duration-200 ${
+                isScrolled
+                  ? "text-maroon hover:text-orange-brand"
+                  : "text-white/90 hover:text-gold-brand"
+              }`}
             >
               <Smartphone className="w-4 h-4" />
               <span>Download App</span>
             </Link>
             <Link
               href="/request-demo"
-              className="bg-maroon hover:bg-maroon-light text-white text-sm font-bold px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 group"
+              className={`text-sm font-bold px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 group ${
+                isScrolled
+                  ? "bg-maroon hover:bg-maroon-light text-white"
+                  : "bg-gold-brand hover:bg-gold-light text-maroon-dark"
+              }`}
             >
               <span>Request Free Demo</span>
               <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -108,7 +122,11 @@ export default function Header() {
           <div className="md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="text-neutral-700 hover:text-maroon p-1.5 rounded-lg hover:bg-maroon/5 focus:outline-none transition-colors duration-200"
+              className={`p-1.5 rounded-lg focus:outline-none transition-colors duration-200 ${
+                isScrolled
+                  ? "text-neutral-700 hover:text-maroon hover:bg-maroon/5"
+                  : "text-white/90 hover:text-gold-brand hover:bg-white/10"
+              }`}
               aria-label="Toggle menu"
             >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
