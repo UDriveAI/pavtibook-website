@@ -12,6 +12,8 @@ export default function Header() {
   const [bannerVisible, setBannerVisible] = useState(false);
   const pathname = usePathname();
 
+  const isHeaderOnDarkBg = pathname === "/features" && !isScrolled;
+
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 10) {
@@ -58,7 +60,7 @@ export default function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
             <Image
-              src={isScrolled ? "/images/Pavati-Book-Logo.png" : "/images/Pavati-Book-Logo-White-Orange.png"}
+              src={isHeaderOnDarkBg ? "/images/Pavati-Book-Logo-White-Orange.png" : "/images/Pavati-Book-Logo.png"}
               alt="PavtiBook Logo"
               width={180}
               height={48}
@@ -77,13 +79,13 @@ export default function Header() {
                   key={link.name}
                   href={link.href}
                   className={`text-sm font-semibold transition-colors duration-200 ${
-                    isScrolled
+                    isHeaderOnDarkBg
                       ? isActive
-                        ? "text-maroon font-bold"
-                        : "text-neutral-700 hover:text-orange-brand"
-                      : isActive
                         ? "text-gold-brand font-bold"
                         : "text-white/90 hover:text-gold-brand"
+                      : isActive
+                        ? "text-maroon font-bold"
+                        : "text-neutral-700 hover:text-orange-brand"
                   }`}
                 >
                   {link.name}
@@ -97,9 +99,9 @@ export default function Header() {
             <Link
               href="/download"
               className={`flex items-center gap-1.5 text-sm font-semibold transition-colors duration-200 ${
-                isScrolled
-                  ? "text-maroon hover:text-orange-brand"
-                  : "text-white/90 hover:text-gold-brand"
+                isHeaderOnDarkBg
+                  ? "text-white/90 hover:text-gold-brand"
+                  : "text-maroon hover:text-orange-brand"
               }`}
             >
               <Smartphone className="w-4 h-4" />
@@ -108,9 +110,9 @@ export default function Header() {
             <Link
               href="/request-demo"
               className={`text-sm font-bold px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 group ${
-                isScrolled
-                  ? "bg-maroon hover:bg-maroon-light text-white"
-                  : "bg-gold-brand hover:bg-gold-light text-maroon-dark"
+                isHeaderOnDarkBg
+                  ? "bg-gold-brand hover:bg-gold-light text-maroon-dark"
+                  : "bg-maroon hover:bg-maroon-light text-white"
               }`}
             >
               <span>Request Free Demo</span>
@@ -123,9 +125,9 @@ export default function Header() {
             <button
               onClick={() => setIsOpen(!isOpen)}
               className={`p-1.5 rounded-lg focus:outline-none transition-colors duration-200 ${
-                isScrolled
-                  ? "text-neutral-700 hover:text-maroon hover:bg-maroon/5"
-                  : "text-white/90 hover:text-gold-brand hover:bg-white/10"
+                isHeaderOnDarkBg
+                  ? "text-white/90 hover:text-gold-brand hover:bg-white/10"
+                  : "text-neutral-700 hover:text-maroon hover:bg-maroon/5"
               }`}
               aria-label="Toggle menu"
             >
