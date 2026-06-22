@@ -357,24 +357,25 @@ function HomePageContent() {
       <Header />
 
       {/* SECTION 1 - HERO */}
-      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-gradient-to-b from-cream-brand to-cream-light">
+      <section className="relative pt-28 pb-16 md:pt-36 md:pb-24 overflow-hidden bg-gradient-to-b from-cream-brand via-cream-light to-white">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#8B1E2D_1px,transparent_1px)] [background-size:16px_16px]"></div>
         
         {/* Background Accent Graphics */}
         <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-orange-brand/10 blur-3xl pointer-events-none"></div>
-        <div className="absolute top-1/2 -left-40 w-96 h-96 rounded-full bg-gold-brand/15 blur-3xl pointer-events-none"></div>
+        <div className="absolute top-1/2 -left-40 w-96 h-96 rounded-full bg-gold-brand/20 blur-3xl pointer-events-none"></div>
+        <div className="absolute bottom-0 right-10 w-80 h-80 rounded-full bg-gold-brand/10 blur-3xl pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             
             {/* Left Content */}
             <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-maroon/10 border border-maroon/20 text-maroon text-xs sm:text-sm font-semibold tracking-wide">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-maroon/10 border border-gold-brand/35 text-maroon text-xs sm:text-sm font-semibold tracking-wide">
                 <span className="flex h-2 w-2 rounded-full bg-orange-brand animate-pulse"></span>
                 <span>Digitizing Indian Collections</span>
               </div>
               
-              <h1 className="text-4xl sm:text-5xl md:text-6xl font-black text-maroon-dark tracking-tight leading-tight">
+              <h1 className="text-4xl sm:text-5xl md:text-[3.5rem] lg:text-[3.75rem] font-black text-maroon-dark tracking-tight leading-[1.15]">
                 Digitize Your <br />
                 <span className="text-orange-brand">Mandal & Trust</span> Collections
               </h1>
@@ -384,7 +385,7 @@ function HomePageContent() {
               </p>
 
               {/* Marathi Accent Tagline */}
-              <div className="bg-cream-brand/80 border-l-4 border-orange-brand p-4 rounded-r-lg max-w-xl mx-auto lg:mx-0 shadow-sm">
+              <div className="bg-cream-brand/90 border-l-4 border-gold-brand p-4 rounded-r-xl max-w-xl mx-auto lg:mx-0 shadow-md border border-maroon/5">
                 <p className="text-lg md:text-xl font-bold text-maroon-dark devanagari italic leading-snug">
                   &quot;वर्गणी घेतल्याबरोबर पावती थेट देणगीदाराच्या WhatsApp वर.&quot;
                 </p>
@@ -394,17 +395,17 @@ function HomePageContent() {
               </div>
 
               {/* CTAs */}
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-5 pt-4">
                 <a
                   href="/request-demo"
-                  className="w-full sm:w-auto text-center bg-maroon hover:bg-maroon-light text-white text-base font-bold px-8 py-4 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-2 group"
+                  className="w-full sm:w-auto text-center bg-maroon hover:bg-maroon-light text-white text-base font-bold px-8 py-4.5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-250 flex items-center justify-center gap-2 group hover:scale-[1.03] active:scale-[0.98]"
                 >
                   <span>Request Free Demo</span>
                   <ArrowRight className="w-5 h-5 transition-transform duration-200 group-hover:translate-x-1" />
                 </a>
                 <a
                   href="/download"
-                  className="w-full sm:w-auto text-center bg-transparent border-2 border-maroon hover:bg-maroon/5 text-maroon text-base font-bold px-8 py-3.5 rounded-xl transition-all duration-200 flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto text-center bg-transparent border-2 border-maroon hover:bg-maroon/5 text-maroon text-base font-bold px-8 py-4 rounded-xl transition-all duration-250 flex items-center justify-center gap-2 hover:scale-[1.03] active:scale-[0.98]"
                 >
                   <Download className="w-5 h-5" />
                   <span>Download App</span>
@@ -412,7 +413,7 @@ function HomePageContent() {
               </div>
 
               {/* Trust badge */}
-              <div className="pt-6 flex items-center justify-center lg:justify-start gap-6 text-neutral-600">
+              <div className="pt-6 flex items-center justify-center lg:justify-start gap-6 text-neutral-655 font-semibold">
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="w-5 h-5 text-green-brand" />
                   <span className="text-xs font-bold uppercase tracking-wider">KYC Verified Trusts Only</span>

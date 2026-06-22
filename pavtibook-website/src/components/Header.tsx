@@ -12,8 +12,6 @@ export default function Header() {
   const [bannerVisible, setBannerVisible] = useState(false);
   const pathname = usePathname();
 
-  const isHeaderOnDarkBg = pathname === "/features" && !isScrolled;
-
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 10) {
@@ -49,10 +47,10 @@ export default function Header() {
     <header
       className={`fixed left-0 right-0 z-50 transition-all duration-300 ${
         bannerVisible ? "top-[40px] sm:top-[44px]" : "top-0"
-      } ${
+      } bg-cream-brand/95 border-b border-maroon/10 ${
         isScrolled
-          ? "bg-cream-brand/95 backdrop-blur-md shadow-md py-3 border-b border-maroon/10"
-          : "bg-transparent py-5"
+          ? "backdrop-blur-[16px] shadow-[0_12px_32px_rgba(0,0,0,0.12)] py-3"
+          : "backdrop-blur-[12px] shadow-[0_8px_24px_rgba(0,0,0,0.08)] py-4"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -60,12 +58,12 @@ export default function Header() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
             <Image
-              src={isHeaderOnDarkBg ? "/images/Pavati-Book-Logo-White-Orange.png" : "/images/Pavati-Book-Logo.png"}
+              src="/images/Pavati-Book-Logo.png"
               alt="PavtiBook Logo"
-              width={180}
-              height={48}
+              width={190}
+              height={52}
               priority
-              className="h-10 sm:h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105"
+              className="h-11 sm:h-14 w-auto object-contain transition-all duration-300 group-hover:scale-105 filter drop-shadow-sm"
             />
             <span className="sr-only">PavtiBook</span>
           </Link>
@@ -78,14 +76,10 @@ export default function Header() {
                 <Link
                   key={link.name}
                   href={link.href}
-                  className={`text-sm font-semibold transition-colors duration-200 ${
-                    isHeaderOnDarkBg
-                      ? isActive
-                        ? "text-gold-brand font-bold"
-                        : "text-white/90 hover:text-gold-brand"
-                      : isActive
-                        ? "text-maroon font-bold"
-                        : "text-neutral-700 hover:text-orange-brand"
+                  className={`text-sm font-semibold transition-all duration-200 hover:text-orange-brand ${
+                    isActive
+                      ? "text-orange-brand border-b-2 border-orange-brand pb-0.5"
+                      : "text-maroon pb-0.5"
                   }`}
                 >
                   {link.name}
@@ -98,22 +92,14 @@ export default function Header() {
           <div className="hidden md:flex items-center gap-4">
             <Link
               href="/download"
-              className={`flex items-center gap-1.5 text-sm font-semibold transition-colors duration-200 ${
-                isHeaderOnDarkBg
-                  ? "text-white/90 hover:text-gold-brand"
-                  : "text-maroon hover:text-orange-brand"
-              }`}
+              className="flex items-center gap-1.5 text-sm font-semibold text-maroon hover:text-orange-brand transition-colors duration-200"
             >
               <Smartphone className="w-4 h-4" />
               <span>Download App</span>
             </Link>
             <Link
               href="/request-demo"
-              className={`text-sm font-bold px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 group ${
-                isHeaderOnDarkBg
-                  ? "bg-gold-brand hover:bg-gold-light text-maroon-dark"
-                  : "bg-maroon hover:bg-maroon-light text-white"
-              }`}
+              className="bg-maroon hover:bg-maroon-light text-white text-sm font-bold px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2 group"
             >
               <span>Request Free Demo</span>
               <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -124,11 +110,7 @@ export default function Header() {
           <div className="md:hidden">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className={`p-1.5 rounded-lg focus:outline-none transition-colors duration-200 ${
-                isHeaderOnDarkBg
-                  ? "text-white/90 hover:text-gold-brand hover:bg-white/10"
-                  : "text-neutral-700 hover:text-maroon hover:bg-maroon/5"
-              }`}
+              className="text-maroon hover:text-orange-brand p-1.5 rounded-lg hover:bg-maroon/5 focus:outline-none transition-colors duration-200"
               aria-label="Toggle menu"
             >
               {isOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
@@ -150,8 +132,8 @@ export default function Header() {
                   onClick={() => setIsOpen(false)}
                   className={`block py-2.5 px-3 rounded-lg text-base font-semibold transition-colors duration-200 ${
                     isActive
-                      ? "bg-maroon/10 text-maroon"
-                      : "text-neutral-700 hover:bg-maroon/5 hover:text-maroon"
+                      ? "bg-maroon/10 text-orange-brand border-l-4 border-orange-brand pl-2"
+                      : "text-maroon hover:bg-maroon/5 hover:text-orange-brand"
                   }`}
                 >
                   {link.name}

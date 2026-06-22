@@ -132,7 +132,7 @@ export default function FeaturesPage() {
       <Header />
 
       {/* Hero Banner */}
-      <section className="pt-28 pb-16 md:pt-36 md:pb-20 bg-maroon-dark text-white relative">
+      <section className="pt-28 pb-16 md:pt-36 md:pb-20 bg-gradient-to-b from-maroon to-[#A32436] text-white relative">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[radial-gradient(#FFF6E8_1px,transparent_1px)] [background-size:16px_16px]"></div>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative">
           <h1 className="text-4xl md:text-5xl font-black tracking-tight text-cream-brand">
