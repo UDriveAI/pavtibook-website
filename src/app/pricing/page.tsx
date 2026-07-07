@@ -26,41 +26,41 @@ export default function PricingPage() {
       name: "Professional",
       marathi: "व्यावसायिक",
       priceMonthly: 99,
-      priceYearly: 799,
+      priceYearly: 999,
       desc: "Perfect for active Ganesh/Navratri Mandals, Temple Trusts, Housing Societies, and community organizations.",
       features: [
-        "Unlimited Receipts",
-        "WhatsApp Receipt Delivery",
-        "Donor Database",
-        "Pending Collection Tracking",
-        "PDF Export",
-        "JPG Export",
-        "Multi-Device Access",
-        "Branding & Signatures",
+        "Unlimited Receipt Generation",
         "Dashboard Reports",
-        "Backup & Restore"
+        "PDF Receipt Export",
+        "Donor Management",
+        "CSV Export",
+        "Unlimited WhatsApp Share Now",
+        "Multi-Device Access",
+        "Custom Branding & Signatures"
       ],
       cta: "Start Free Trial",
       href: "/request-demo",
-      popular: true
+      popular: false,
+      savings: 189
     },
     {
-      name: "Enterprise",
-      marathi: "उद्योग",
-      priceMonthly: "Custom",
-      priceYearly: "Custom",
-      desc: "Designed for large temple trusts and NGOs with high-volume collection drives.",
+      name: "Premium",
+      marathi: "प्रीमियम",
+      priceMonthly: 199,
+      priceYearly: 1999,
+      desc: "Designed for busy collection drives requiring automatic WhatsApp delivery and priority assistance.",
       features: [
-        "White Label",
-        "Custom Branding",
-        "Dedicated Support",
-        "API Integrations",
-        "Advanced Reporting",
-        "Priority Onboarding"
+        "Everything in Professional",
+        "Auto WhatsApp Receipt Send",
+        "Up to 1000 Auto Sends per month",
+        "Unlimited WhatsApp Share Now",
+        "Priority Support",
+        "Advanced Analytics & Tracking"
       ],
-      cta: "Contact Sales / Demo",
+      cta: "Book Free Demo",
       href: "/request-demo",
-      popular: false
+      popular: true,
+      savings: 389
     }
   ];
 
@@ -80,7 +80,7 @@ export default function PricingPage() {
               Simple Plans for Mandals & Trusts
             </h1>
             <p className="text-sm md:text-base text-neutral-600 font-medium leading-relaxed">
-              No hidden platform fees, no commissions on donations. Choose the volume that fits your festival size.
+              No hidden platform fees, no commissions on donations. Choose the plan that fits your festival size.
             </p>
 
             {/* Monthly / Yearly Toggle */}
@@ -112,7 +112,6 @@ export default function PricingPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch max-w-4xl mx-auto">
             {plans.map((plan) => {
               const price = billingPeriod === "monthly" ? plan.priceMonthly : plan.priceYearly;
-              const isCustom = price === "Custom";
               return (
                 <div
                   key={plan.name}
@@ -135,21 +134,20 @@ export default function PricingPage() {
                       <p className="text-xs text-orange-brand font-bold devanagari">{plan.marathi}</p>
                     </div>
 
-                    <div className="flex items-baseline">
-                      {isCustom ? (
-                        <span className="text-3xl font-black text-neutral-850 tracking-tight">
-                          Custom Pricing
+                    <div className="space-y-2">
+                      <div className="flex items-baseline">
+                        <span className="text-2xl font-bold text-neutral-850">₹</span>
+                        <span className="text-4xl sm:text-5xl font-black text-neutral-850 tracking-tight">
+                          {price}
                         </span>
-                      ) : (
-                        <>
-                          <span className="text-2xl font-bold text-neutral-850">₹</span>
-                          <span className="text-4xl sm:text-5xl font-black text-neutral-850 tracking-tight">
-                            {price}
-                          </span>
-                          <span className="text-neutral-500 text-xs font-semibold ml-1.5">
-                            /{billingPeriod === "monthly" ? "month" : "year"}
-                          </span>
-                        </>
+                        <span className="text-neutral-500 text-xs font-semibold ml-1.5">
+                          /{billingPeriod === "monthly" ? "month" : "year"}
+                        </span>
+                      </div>
+                      {billingPeriod === "yearly" && (
+                        <p className="text-xs font-bold text-green-600">
+                          Save ₹{plan.savings}/year
+                        </p>
                       )}
                     </div>
 
@@ -289,9 +287,13 @@ export default function PricingPage() {
           {/* Pricing FAQ short section */}
           <div className="space-y-6">
             <h4 className="text-center font-extrabold text-xl text-maroon-dark border-b border-neutral-100 pb-3">
-              Pricing Details
+              Frequently Asked Questions
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-xs sm:text-sm text-neutral-700 font-medium">
+              <div className="space-y-1">
+                <h5 className="font-bold text-neutral-900">What is the difference between &quot;WhatsApp Share Now&quot; and &quot;Auto WhatsApp Send&quot;?</h5>
+                <p className="text-neutral-600"><strong>WhatsApp Share Now</strong> (available in both Professional and Premium plans) opens the native share sheet on your device, allowing you to select a contact and manually send the receipt using your WhatsApp app. <strong>Auto WhatsApp Send</strong> (exclusive to Premium) uses our cloud API to automatically deliver receipt alerts to the donor’s phone instantly on receipt generation without manual work.</p>
+              </div>
               <div className="space-y-1">
                 <h5 className="font-bold text-neutral-900">Are there any transaction commission charges?</h5>
                 <p className="text-neutral-600">No. Standard payment processors charge 1.5% to 3% per transaction. PavtiBook uses P2P UPI routing where donors pay your trust VPA bank details directly. We charge 0% commission.</p>
@@ -299,6 +301,10 @@ export default function PricingPage() {
               <div className="space-y-1">
                 <h5 className="font-bold text-neutral-900">Can we cancel or upgrade our subscription?</h5>
                 <p className="text-neutral-600">Yes. You can upgrade, downgrade, or cancel your subscription at any time. When you cancel, your donor database and files will remain in read-only format for compliance audits.</p>
+              </div>
+              <div className="space-y-1">
+                <h5 className="font-bold text-neutral-900">What happens when we exceed the 1000 Auto Sends limit?</h5>
+                <p className="text-neutral-600">If you exceed the 1000 Auto Sends limit in a billing month, you can still use the unlimited &quot;WhatsApp Share Now&quot; feature for manual sharing, or purchase top-up packs from the settings menu.</p>
               </div>
             </div>
           </div>

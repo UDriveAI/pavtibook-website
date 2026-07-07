@@ -192,7 +192,7 @@ export default function ContactPage() {
                 <div className="space-y-1">
                   <h3 className="font-bold text-neutral-800 text-sm font-sans">Office Address</h3>
                   <p className="text-xs text-neutral-600 leading-relaxed font-medium">
-                    Office 302, Saffron Heights, Dadar West, Mumbai, Maharashtra 400028
+                    Plot No. 171, Sector 21, Kamothe, Panvel – 410209
                   </p>
                 </div>
               </div>

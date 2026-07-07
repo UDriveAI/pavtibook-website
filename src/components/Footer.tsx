@@ -79,6 +79,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/delete-account" className="hover:text-orange-brand transition-colors duration-200">
+                  Delete Account
+                </Link>
+              </li>
+              <li>
                 <Link href="/contact" className="hover:text-orange-brand transition-colors duration-200">
                   Contact Us
                 </Link>

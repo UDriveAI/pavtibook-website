@@ -132,10 +132,10 @@ export default function RootLayout({
     "priceRange": "₹₹",
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": "Office 302, Saffron Heights, Dadar West",
-      "addressLocality": "Mumbai",
+      "streetAddress": "Plot No. 171, Sector 21, Kamothe",
+      "addressLocality": "Panvel",
       "addressRegion": "Maharashtra",
-      "postalCode": "400028",
+      "postalCode": "410209",
       "addressCountry": "IN"
     },
     "openingHoursSpecification": {
