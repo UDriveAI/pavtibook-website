@@ -57,7 +57,7 @@ export default function TermsPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-bold text-maroon-dark">5. Fair Use & Collection Limits</h2>
               <p>
-                PavtiBook offers tiered services (Starter, Professional, Enterprise). Organizations must operate within the volume limits of their subscribed plan. Exceeding limits may prompt a hold on new receipt generation until the account is upgraded.
+                PavtiBook offers tiered services (Professional, Premium). Organizations must operate within the volume limits of their subscribed plan. Exceeding limits may prompt a hold on new receipt generation until the account is upgraded.
               </p>
             </section>
 

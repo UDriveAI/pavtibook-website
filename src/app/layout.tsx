@@ -93,7 +93,7 @@ export default function RootLayout({
       "price": "99",
       "priceCurrency": "INR"
     },
-    "description": "Digital Receipt Book & Collection Management Platform for Indian Ganesh Mandals, Navratri Mandals, Temple Trusts, NGOs, and Housing Societies. Enables instant WhatsApp receipt delivery and UPI payments.",
+    "description": "Digital Receipt Book & Collection Management Platform for Indian Ganesh Mandals, Navratri Mandals, Temple Trusts, NGOs, and Housing Societies. Enables instant WhatsApp receipt sharing and UPI payments.",
     "aggregateRating": {
       "@type": "AggregateRating",
       "ratingValue": "4.9",

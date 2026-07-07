@@ -178,7 +178,7 @@ export default function ContactPage() {
                       Send official trust documents or queries to our email address.
                     </p>
                     <p className="text-xs font-bold text-neutral-850">
-                      support@pavtibook.online
+                      admin@pavtibook.online
                     </p>
                   </div>
                 </div>

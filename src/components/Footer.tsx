@@ -128,11 +128,11 @@ export default function Footer() {
                 <span>Call: +91 99305 33929</span>
               </a>
               <a
-                href="mailto:support@pavtibook.online"
+                href="mailto:admin@pavtibook.online"
                 className="flex items-center gap-2 hover:text-orange-brand transition-colors duration-200"
               >
                 <Mail className="w-4 h-4 shrink-0" />
-                <span>support@pavtibook.online</span>
+                <span>admin@pavtibook.online</span>
               </a>
               <div className="flex items-start gap-2 pt-1">
                 <Clock className="w-4 h-4 shrink-0 mt-0.5" />
