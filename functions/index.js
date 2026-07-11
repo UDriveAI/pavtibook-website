@@ -1648,6 +1648,17 @@ exports.verifyGooglePlayPurchase = onCall({
   const expiryTimeMillis = parseInt(purchaseDetails.expiryTimeMillis, 10);
   const nowMillis = Date.now();
 
+  // Validate parameters and response details
+  if (!purchaseDetails.orderId) {
+    logger.error('Google Play purchase orderId is missing or mismatch.');
+    throw new HttpsError('failed-precondition', 'Invalid order ID from Google Play.');
+  }
+
+  if (purchaseDetails.paymentState !== 1 && purchaseDetails.paymentState !== 2) {
+    logger.warn(`Google Play purchase state is pending or invalid: ${purchaseDetails.paymentState}`);
+    throw new HttpsError('failed-precondition', 'Purchase state is not active.');
+  }
+
   if (expiryTimeMillis < nowMillis) {
     await transactionRef.set({
       purchaseToken,
@@ -1659,6 +1670,28 @@ exports.verifyGooglePlayPurchase = onCall({
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     throw new HttpsError('failed-precondition', 'This subscription has already expired.');
+  }
+
+  logger.info('[IAP Verification Audit]', {
+    orderId: purchaseDetails.orderId,
+    autoRenewing: purchaseDetails.autoRenewing,
+    linkedPurchaseToken: purchaseDetails.linkedPurchaseToken || null,
+    acknowledgementState: purchaseDetails.acknowledgementState,
+  });
+
+  // Acknowledge the subscription purchase server-side if not acknowledged
+  if (purchaseDetails.acknowledgementState === 0) {
+    try {
+      await playPublisher.purchases.subscriptions.acknowledge({
+        packageName: packageName,
+        subscriptionId: productId,
+        token: purchaseToken,
+        resource: {}
+      });
+      logger.info('Successfully acknowledged subscription purchase server-side.');
+    } catch (ackError) {
+      logger.error('Failed to acknowledge subscription purchase:', ackError);
+    }
   }
 
   let receiptLimit = 999999;
@@ -1733,6 +1766,55 @@ exports.verifyGooglePlayPurchase = onCall({
   } catch (error) {
     logger.error('Error writing transaction to Firestore:', error.message);
     throw new HttpsError('internal', `Payment verified, but failed to update database: ${error.message}`);
+  }
+});
+
+exports.scheduledSubscriptionCleanup = onSchedule('every 24 hours', async (event) => {
+  logger.info('[Scheduler] Starting daily subscription validation and cleanup...');
+  const now = new Date();
+  
+  try {
+    const subscriptionsRef = db.collection('subscriptions');
+    const activeSubsSnap = await subscriptionsRef
+      .where('plan', '!=', 'free_trial')
+      .get();
+      
+    let expiredCount = 0;
+    
+    for (const doc of activeSubsSnap.docs) {
+      const data = doc.data();
+      if (!data.renewalDate) continue;
+      
+      const renewalDate = new Date(data.renewalDate);
+      
+      if (renewalDate < now) {
+        const orgId = data.organizationId;
+        logger.info(`[Scheduler] Subscription for orgId=${orgId} has expired. Expiring now...`);
+        
+        await db.runTransaction(async (transaction) => {
+          const subRef = subscriptionsRef.doc(orgId);
+          const orgRef = db.collection('organizations').doc(orgId);
+          
+          const subSnap = await transaction.get(subRef);
+          if (subSnap.exists && subSnap.data().plan !== 'free_trial') {
+            transaction.update(subRef, {
+              plan: 'free_trial',
+              receiptLimit: 10,
+              usersLimit: 1,
+              updatedAt: new Date().toISOString()
+            });
+            transaction.update(orgRef, {
+              subscription_plan: 'free_trial'
+            });
+          }
+        });
+        expiredCount++;
+      }
+    }
+    
+    logger.info(`[Scheduler] Subscription cleanup completed. Expired ${expiredCount} subscriptions.`);
+  } catch (err) {
+    logger.error('[Scheduler] Error running subscription cleanup:', err.message, err.stack);
   }
 });
 

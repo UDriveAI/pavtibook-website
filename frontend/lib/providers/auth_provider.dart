@@ -65,7 +65,15 @@ class AuthProvider with ChangeNotifier {
           .doc(orgId)
           .get();
       if (subDoc.exists) {
-        _subscription = SubscriptionModel.fromJson(subDoc.data()!);
+        final data = Map<String, dynamic>.from(subDoc.data()!);
+        final isFromCache = subDoc.metadata.isFromCache;
+        if (isFromCache && data['plan'] != 'free_trial') {
+          // Force fallback to free trial constraints if offline (to prevent cached premium unlocks)
+          data['plan'] = 'free_trial';
+          data['receiptLimit'] = 10;
+          data['usersLimit'] = 1;
+        }
+        _subscription = SubscriptionModel.fromJson(data);
       } else {
         final defaultSub = {
           'id': orgId,
