@@ -13,6 +13,7 @@ import '../widgets/shimmer_skeleton.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/profile_photo_widget.dart';
 import '../widgets/donor_avatar.dart';
+import '../services/payment_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -133,6 +134,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _refreshStats();
     _fetchPendingTransfer();
+    
+    // Automatically query and restore active Google Play purchases silently
+    PaymentService().restorePurchases().catchError((e) {
+      debugPrint('Silent purchase restore failed: $e');
+    });
   }
 
   Future<void> _fetchPendingTransfer() async {
