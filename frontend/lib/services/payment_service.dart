@@ -330,38 +330,17 @@ class GooglePlayPaymentService implements PaymentService {
     required String oldPlan,
     Map<String, dynamic> extraData = const {},
   }) async {
-    final productId = extraData['productId'] ?? planName;
-    
-    // Simulate cloud function delay
-    await Future.delayed(const Duration(milliseconds: 1000));
-    
-    // We update Firestore using existing subscription service
-    int receiptLimit = 999999;
-    int usersLimit = planName.contains('premium') ? 10 : 3;
+    final PaymentRepository paymentRepository = PaymentRepository();
+    final productId = extraData['productId'] ?? (planName == 'monthly' ? 'professional_monthly' : 'professional_yearly');
 
-    if (planName == 'monthly' || planName == 'professional_monthly' || productId == 'professional_monthly') {
-      await SubscriptionService.upgradeToMonthly(
-        orgId: orgId,
-        price: 99.0,
-        receiptLimit: receiptLimit,
-        usersLimit: usersLimit,
-        oldPlan: oldPlan,
-        operatorName: operatorName,
-        transactionId: paymentId,
-      );
-    } else {
-      await SubscriptionService.upgradeToYearly(
-        orgId: orgId,
-        price: 999.0,
-        receiptLimit: receiptLimit,
-        usersLimit: usersLimit,
-        oldPlan: oldPlan,
-        operatorName: operatorName,
-        transactionId: paymentId,
-      );
-    }
-
-    return {'success': true};
+    return paymentRepository.verifyGooglePlayPurchase(
+      purchaseToken: orderId,
+      productId: productId,
+      orgId: orgId,
+      planName: planName,
+      operatorName: operatorName,
+      oldPlan: oldPlan,
+    );
   }
 
   @override

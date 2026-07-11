@@ -101,4 +101,54 @@ class PaymentRepository {
 
     return Map<String, dynamic>.from(responseBody['result']);
   }
+
+  Future<Map<String, dynamic>> verifyGooglePlayPurchase({
+    required String purchaseToken,
+    required String productId,
+    required String orgId,
+    required String planName,
+    required String operatorName,
+    required String oldPlan,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('User is not authenticated.');
+    }
+    final idToken = await user.getIdToken();
+    final projectId = Firebase.app().options.projectId;
+    final url =
+        'https://$_region-$projectId.cloudfunctions.net/verifyGooglePlayPurchase';
+
+    final response = await http
+        .post(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $idToken',
+          },
+          body: jsonEncode({
+            'data': {
+              'purchaseToken': purchaseToken,
+              'productId': productId,
+              'orgId': orgId,
+              'planName': planName,
+              'operatorName': operatorName,
+              'oldPlan': oldPlan,
+            }
+          }),
+        )
+        .timeout(const Duration(seconds: 25));
+
+    if (response.statusCode != 200) {
+      throw Exception(
+          'Verification failed: Server returned status code ${response.statusCode}\n${response.body}');
+    }
+
+    final responseBody = jsonDecode(response.body);
+    if (responseBody == null || responseBody['result'] == null) {
+      throw Exception('Verification failed: Invalid server response.');
+    }
+
+    return Map<String, dynamic>.from(responseBody['result']);
+  }
 }

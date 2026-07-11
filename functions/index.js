@@ -1,4 +1,4 @@
-﻿const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError, onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { setGlobalOptions } = require('firebase-functions/v2');
@@ -1569,5 +1569,170 @@ exports.whatsappWebhook = onRequest({
   }
 
   res.sendStatus(405);
+});
+
+const { google } = require('googleapis');
+
+exports.verifyGooglePlayPurchase = onCall({
+  secrets: ['PLAY_BILLING_SERVICE_ACCOUNT_KEY']
+}, async (request) => {
+  const { auth } = request;
+  if (!auth) {
+    logger.warn('Unauthenticated request to verifyGooglePlayPurchase.');
+    throw new HttpsError('unauthenticated', 'Authentication Required');
+  }
+
+  const { purchaseToken, productId, orgId, planName, operatorName, oldPlan } = request.data;
+  if (!purchaseToken || !productId || !orgId || !planName || !operatorName) {
+    throw new HttpsError('invalid-argument', 'Missing parameters for purchase verification.');
+  }
+
+  // 1. Idempotency Check: Query payment_transactions
+  const transactionRef = db.collection('payment_transactions').doc(purchaseToken);
+  const transactionSnap = await transactionRef.get();
+  
+  if (transactionSnap.exists) {
+    logger.warn(`Idempotency trigger: Token ${purchaseToken} has already been processed.`);
+    return { success: true, message: 'Purchase already processed.' };
+  }
+
+  // 2. Play Developer API token verification
+  const rawServiceAccountKey = process.env.PLAY_BILLING_SERVICE_ACCOUNT_KEY;
+  if (!rawServiceAccountKey) {
+    logger.error('PLAY_BILLING_SERVICE_ACCOUNT_KEY secret is not configured.');
+    throw new HttpsError('failed-precondition', 'Server is missing Google Play credentials.');
+  }
+
+  let credentials;
+  try {
+    credentials = JSON.parse(rawServiceAccountKey);
+  } catch (e) {
+    logger.error('Failed to parse PLAY_BILLING_SERVICE_ACCOUNT_KEY JSON:', e);
+    throw new HttpsError('internal', 'Invalid credentials format on server.');
+  }
+
+  let playPublisher;
+  try {
+    const jwtClient = new google.auth.JWT(
+      credentials.client_email,
+      null,
+      credentials.private_key,
+      ['https://www.googleapis.com/auth/androidpublisher']
+    );
+    await jwtClient.authorize();
+    playPublisher = google.androidpublisher({
+      version: 'v3',
+      auth: jwtClient
+    });
+  } catch (err) {
+    logger.error('Failed to authenticate JWT with Google APIs:', err);
+    throw new HttpsError('internal', `API Authentication failed: ${err.message}`);
+  }
+
+  const packageName = 'online.pavtibook.app';
+  let purchaseDetails;
+  
+  try {
+    const result = await playPublisher.purchases.subscriptions.get({
+      packageName: packageName,
+      subscriptionId: productId,
+      token: purchaseToken
+    });
+    purchaseDetails = result.data;
+  } catch (error) {
+    logger.error('Google Play API verification call failed:', error);
+    throw new HttpsError('internal', `Failed to verify purchase with Google Play: ${error.message}`);
+  }
+
+  // 3. Verify Purchase State & Expiry
+  const expiryTimeMillis = parseInt(purchaseDetails.expiryTimeMillis, 10);
+  const nowMillis = Date.now();
+
+  if (expiryTimeMillis < nowMillis) {
+    await transactionRef.set({
+      purchaseToken,
+      productId,
+      organizationId: orgId,
+      verificationStatus: 'EXPIRED',
+      paymentProvider: 'GOOGLE_PLAY',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    throw new HttpsError('failed-precondition', 'This subscription has already expired.');
+  }
+
+  let receiptLimit = 999999;
+  let usersLimit = 3;
+  if (productId.includes('premium')) {
+    usersLimit = 10;
+  }
+
+  // 4. Update Firestore & Write history/logs inside a transaction
+  try {
+    await db.runTransaction(async (transaction) => {
+      const subRef = db.collection('subscriptions').doc(orgId);
+      const historyRef = db.collection('subscription_history').doc();
+      const logRef = db.collection('activity_logs').doc();
+
+      const subSnapshot = await transaction.get(subRef);
+      const currentSubData = subSnapshot.exists ? subSnapshot.data() : null;
+      const currentUsersUsed = currentSubData ? (currentSubData.usersUsed || 1) : 1;
+
+      transaction.set(subRef, {
+        id: orgId,
+        organizationId: orgId,
+        plan: planName,
+        receiptsUsed: 0,
+        receiptLimit: receiptLimit,
+        usersUsed: currentUsersUsed,
+        usersLimit: usersLimit,
+        renewalDate: new Date(expiryTimeMillis).toISOString(),
+        createdAt: currentSubData ? (currentSubData.createdAt || new Date().toISOString()) : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+
+      transaction.set(historyRef, {
+        id: historyRef.id,
+        organizationId: orgId,
+        oldPlan: oldPlan || 'free_trial',
+        newPlan: planName,
+        amountPaid: productId.includes('yearly') ? (productId.includes('premium') ? 1999.0 : 999.0) : (productId.includes('premium') ? 199.0 : 99.0),
+        receiptLimit: receiptLimit,
+        usersLimit: usersLimit,
+        activatedAt: new Date().toISOString(),
+        expiresAt: new Date(expiryTimeMillis).toISOString(),
+        operator: operatorName,
+        status: 'success',
+        googlePlayOrderId: purchaseDetails.orderId,
+        googlePlayPurchaseToken: purchaseToken,
+      });
+
+      transaction.set(logRef, {
+        organizationId: orgId,
+        userId: auth.uid,
+        userName: operatorName,
+        userRole: 'owner',
+        action: 'Subscription Upgraded',
+        details: `Upgraded plan to ${planName} via Google Play Billing`,
+        timestamp: new Date().toISOString(),
+      });
+
+      transaction.set(transactionRef, {
+        purchaseToken,
+        productId,
+        organizationId: orgId,
+        verificationStatus: 'SUCCESS',
+        paymentProvider: 'GOOGLE_PLAY',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    logger.info(`Successfully verified and updated subscription for organization ${orgId} to ${planName} via Google Play.`);
+    return { success: true };
+  } catch (error) {
+    logger.error('Error writing transaction to Firestore:', error.message);
+    throw new HttpsError('internal', `Payment verified, but failed to update database: ${error.message}`);
+  }
 });
 
