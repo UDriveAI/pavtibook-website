@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "780452591351",
+    "project_id": "pavtibook-7251a",
+    "storage_bucket": "pavtibook-7251a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:780452591351:android:cca0a1802acba322b205f2",
+        "android_client_info": {
+          "package_name": "com.pavtibook.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDT0rQhvD4D30MApVzvJS4VmHLm7rObw4c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

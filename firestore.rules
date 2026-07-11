@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper: checks if user is logged in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper: checks if user document matches organization
+    function belongsToOrg(orgId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organizationId == orgId ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.organization_id == orgId
+      );
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && (request.auth.uid == userId);
+    }
+    
+    match /organizations/{orgId} {
+      allow read: if belongsToOrg(orgId);
+      allow create: if isSignedIn();
+      allow update, delete: if belongsToOrg(orgId);
+    }
+    
+    match /donors/{donorId} {
+      allow read: if isSignedIn() && belongsToOrg(resource.data.organizationId);
+      allow create: if isSignedIn() && belongsToOrg(request.resource.data.organizationId);
+      allow update: if isSignedIn() && belongsToOrg(resource.data.organizationId) && belongsToOrg(request.resource.data.organizationId);
+      allow delete: if isSignedIn() && belongsToOrg(resource.data.organizationId);
+    }
+    
+    match /receipts/{receiptId} {
+      allow read: if isSignedIn() && belongsToOrg(resource.data.organizationId);
+      allow create: if isSignedIn() && belongsToOrg(request.resource.data.organizationId);
+      allow update: if isSignedIn() && belongsToOrg(resource.data.organizationId) && belongsToOrg(request.resource.data.organizationId);
+      allow delete: if isSignedIn() && belongsToOrg(resource.data.organizationId);
+
+      match /delivery_logs/{logId} {
+        allow read, write: if isSignedIn() && belongsToOrg(get(/databases/$(database)/documents/receipts/$(receiptId)).data.organizationId);
+      }
+    }
+    
+    match /templates/{templateId} {
+      allow read: if isSignedIn() && belongsToOrg(resource.data.organizationId);
+      allow create: if isSignedIn() && belongsToOrg(request.resource.data.organizationId);
+      allow update: if isSignedIn() && belongsToOrg(resource.data.organizationId) && belongsToOrg(request.resource.data.organizationId);
+      allow delete: if isSignedIn() && belongsToOrg(resource.data.organizationId);
+    }
+    
+    match /whatsapp_logs/{logId} {
+      allow read: if isSignedIn() && (resource == null || belongsToOrg(resource.data.organizationId));
+    }
+    
+    match /whatsapp_usage/{usageId} {
+      allow read: if isSignedIn() && (resource == null || belongsToOrg(resource.data.organizationId));
+    }
+    
+    match /counters/{counterId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (request.resource.data.currentNumber == 1);
+      allow update: if isSignedIn() && (
+        (request.resource.data.currentNumber == resource.data.currentNumber + 1) ||
+        (request.resource.data.currentNumber == resource.data.currentNumber)
+      );
+    }
+
+    // Helper: get current user data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper: check if user is admin/owner/president/treasurer of the organization
+    function isOrgAdmin(orgId) {
+      return belongsToOrg(orgId) && (
+        getUserData().role == 'owner' ||
+        getUserData().role == 'admin' ||
+        getUserData().role == 'president' ||
+        getUserData().role == 'treasurer'
+      );
+    }
+
+    // Helper: check if user is member of the organization
+    function isOrgMember(orgId) {
+      return belongsToOrg(orgId);
+    }
+
+    match /subscription_config/{configId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    match /subscriptions/{subId} {
+      allow read: if isOrgMember(subId);
+      allow create: if isOrgAdmin(subId);
+      allow update: if isOrgAdmin(subId) || (
+        isSignedIn() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usersUsed', 'updatedAt']) &&
+        request.resource.data.usersUsed == resource.data.usersUsed + 1
+      );
+      allow delete: if false;
+    }
+
+    match /subscription_history/{historyId} {
+      allow read: if isSignedIn() && isOrgMember(resource.data.organizationId);
+      allow create: if isSignedIn() && isOrgAdmin(request.resource.data.organizationId);
+      allow update, delete: if false;
+    }
+
+    match /organization_members/{memberId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (isOrgAdmin(request.resource.data.organizationId) || request.auth.uid == memberId);
+      allow update: if isSignedIn() && (
+        isOrgAdmin(resource.data.organizationId) || 
+        (request.auth.uid == memberId && request.resource.data.role == resource.data.role && request.resource.data.organizationId == resource.data.organizationId)
+      );
+      allow delete: if isSignedIn() && isOrgAdmin(resource.data.organizationId) && resource.data.role != 'owner';
+    }
+
+    match /organization_invites/{inviteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOrgAdmin(request.resource.data.organizationId);
+      allow update: if isSignedIn() && (
+        isOrgAdmin(resource.data.organizationId) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'used', 'updatedAt']) &&
+         request.resource.data.status == 'accepted')
+      );
+      allow delete: if isSignedIn() && isOrgAdmin(resource.data.organizationId);
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if isSignedIn() && isOrgMember(resource.data.organizationId);
+      allow create: if isSignedIn() && (isOrgMember(request.resource.data.organizationId) || request.auth.uid == request.resource.data.userId);
+      allow update, delete: if false;
+    }
+
+    match /ownership_transfers/{transferId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOrgAdmin(request.resource.data.organizationId);
+      allow update: if isSignedIn() && (
+        isOrgAdmin(resource.data.organizationId) || 
+        request.auth.uid == resource.data.requestedTo.uid
+      );
+      allow delete: if false;
+    }
+
+    match /ownership_history/{historyId} {
+      allow read: if isSignedIn() && isOrgMember(resource.data.organizationId);
+      allow create: if isSignedIn() && isOrgMember(request.resource.data.organizationId);
+      allow update, delete: if false;
+    }
+  }
+}

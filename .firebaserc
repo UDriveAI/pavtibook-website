@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "pavtibook-7251a",
+    "firebase functions:secrets:set RAZORPAY_KEY_ID": "pavtibook-7251a"
+  },
+  "targets": {},
+  "etags": {}
+}
