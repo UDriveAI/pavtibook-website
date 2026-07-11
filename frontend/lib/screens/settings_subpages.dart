@@ -2170,7 +2170,7 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
     }
   }
 
-  Future<void> _handlePaymentSuccess(PaymentSuccessResponse response) async {
+  Future<void> _handlePaymentSuccess(PaymentSuccessData response) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final orgId = auth.organization?.id;
     if (orgId == null || _pendingPlanType == null) return;
@@ -2185,13 +2185,14 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
     String? errorReason;
     try {
       final verificationResult = await _paymentService.verifyPayment(
-        paymentId: response.paymentId ?? '',
-        orderId: response.orderId ?? _pendingOrderId ?? '',
-        signature: response.signature ?? '',
+        paymentId: response.paymentId,
+        orderId: response.orderId,
+        signature: response.signature,
         orgId: orgId,
         planName: _pendingPlanType!,
         operatorName: operatorName,
         oldPlan: oldPlan,
+        extraData: response.extraData,
       );
 
       if (verificationResult['success'] != true) {
@@ -2262,7 +2263,7 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
     }
   }
 
-  void _handlePaymentFailure(PaymentFailureResponse response) {
+  void _handlePaymentFailure(PaymentFailureData response) {
     debugPrint('Payment failed: ${response.code} - ${response.message}');
     if (mounted) {
       showDialog(
@@ -2802,6 +2803,41 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          Center(
+            child: TextButton.icon(
+              onPressed: () async {
+                setState(() => _isPaymentProcessing = true);
+                try {
+                  await _paymentService.restorePurchases();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Purchase restore check triggered.')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Restore failed: $e')),
+                    );
+                  }
+                } finally {
+                  if (mounted) {
+                    setState(() => _isPaymentProcessing = false);
+                  }
+                }
+              },
+              icon: const Icon(Icons.restore, color: Color(0xFF8B1E2D)),
+              label: const Text(
+                'Restore Google Play Purchases',
+                style: TextStyle(
+                  color: Color(0xFF8B1E2D),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
