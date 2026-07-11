@@ -2015,7 +2015,6 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
 
   final PaymentService _paymentService = PaymentService();
   String? _pendingPlanType;
-  String? _pendingOrderId;
   bool _isPaymentProcessing = false;
   bool _checkedArguments = false;
 
@@ -2351,7 +2350,6 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
       }
 
       _pendingPlanType = planType;
-      _pendingOrderId = orderId;
 
       setState(() {
         _isUpgrading = false;

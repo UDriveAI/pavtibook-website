@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../repositories/payment_repository.dart';
-import 'subscription_service.dart';
 
 enum PaymentProviderType { razorpay, googlePlay }
 
@@ -202,7 +201,6 @@ class GooglePlayPaymentService implements PaymentService {
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   late Function(PaymentSuccessData) _onSuccess;
   late Function(PaymentFailureData) _onFailure;
-  String? _currentPendingPlan;
 
   @override
   void init({
@@ -251,8 +249,6 @@ class GooglePlayPaymentService implements PaymentService {
     required String prefillContact,
     required String prefillEmail,
   }) async {
-    _currentPendingPlan = planName;
-
     final bool available = await _iap.isAvailable();
     if (!available) {
       _onFailure(PaymentFailureData(code: 0, message: 'Google Play Billing is not available on this device.'));
