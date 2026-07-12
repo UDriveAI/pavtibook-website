@@ -375,7 +375,25 @@ class AuthProvider with ChangeNotifier {
         debugPrint('$cleanupStack');
       }
 
-      _errorMessage = e.toString().replaceAll(RegExp(r'\[.*\]\s*'), '');
+      if (e is FirebaseAuthException) {
+        if (e.code == 'email-already-in-use') {
+          _errorMessage = 'An account with this email already exists.';
+        } else if (e.code == 'weak-password') {
+          _errorMessage = 'The password is too weak. Please use a stronger password.';
+        } else if (e.code == 'invalid-email') {
+          _errorMessage = 'The email address is invalid.';
+        } else {
+          _errorMessage = e.message ?? 'Registration failed. Please try again.';
+        }
+      } else if (e is FirebaseException) {
+        if (e.code == 'permission-denied') {
+          _errorMessage = 'Unable to create account. Please try again.';
+        } else {
+          _errorMessage = e.message ?? 'Database setup failed. Please try again.';
+        }
+      } else {
+        _errorMessage = 'Unable to complete registration. Please try again.';
+      }
     }
 
     _isLoading = false;
@@ -430,8 +448,18 @@ class AuthProvider with ChangeNotifier {
       } else {
         _errorMessage = 'User profile not found.';
       }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'invalid-credential' || e.code == 'wrong-password' || e.code == 'user-not-found' || e.code == 'invalid-email') {
+        _errorMessage = 'Incorrect email or password.';
+      } else if (e.code == 'user-disabled') {
+        _errorMessage = 'This account has been disabled. Please contact support.';
+      } else if (e.code == 'too-many-requests') {
+        _errorMessage = 'Too many login attempts. Please try again later.';
+      } else {
+        _errorMessage = e.message ?? 'Login failed. Please try again.';
+      }
     } catch (e) {
-      _errorMessage = e.toString().replaceAll(RegExp(r'\[.*\]\s*'), '');
+      _errorMessage = 'An unexpected error occurred. Please try again.';
     }
 
     _isLoading = false;
@@ -916,6 +944,32 @@ class AuthProvider with ChangeNotifier {
       debugPrint('Error restoring organization: $e');
       _errorMessage = 'Failed to restore organization: $e';
     }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  // Send Password Reset Email
+  Future<bool> sendPasswordResetEmail(String email) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'user-not-found' || e.code == 'invalid-email') {
+        _errorMessage = 'Please enter a valid registered email address.';
+      } else {
+        _errorMessage = e.message ?? 'Failed to send password reset email.';
+      }
+    } catch (e) {
+      _errorMessage = 'An unexpected error occurred. Please try again.';
+    }
+
     _isLoading = false;
     notifyListeners();
     return false;

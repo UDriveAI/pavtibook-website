@@ -93,7 +93,11 @@ service cloud.firestore {
 
     match /subscriptions/{subId} {
       allow read: if isOrgMember(subId);
-      allow create: if isOrgAdmin(subId);
+      allow create: if isOrgAdmin(subId) || (
+        isSignedIn() && 
+        subId == request.resource.data.organizationId && 
+        request.resource.data.plan == 'free_trial'
+      );
       allow update: if isOrgAdmin(subId) || (
         isSignedIn() && 
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usersUsed', 'updatedAt']) &&
