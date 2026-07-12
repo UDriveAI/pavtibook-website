@@ -155,5 +155,9 @@ service cloud.firestore {
       allow create: if isSignedIn() && isOrgMember(request.resource.data.organizationId);
       allow update, delete: if false;
     }
+
+    match /secrets/{secretId} {
+      allow read, write: if false;
+    }
   }
 }

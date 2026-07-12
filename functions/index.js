@@ -1573,9 +1573,7 @@ exports.whatsappWebhook = onRequest({
 
 const { google } = require('googleapis');
 
-exports.verifyGooglePlayPurchase = onCall({
-  secrets: ['PLAY_BILLING_SERVICE_ACCOUNT_KEY']
-}, async (request) => {
+exports.verifyGooglePlayPurchase = onCall(async (request) => {
   const { auth } = request;
   if (!auth) {
     logger.warn('Unauthenticated request to verifyGooglePlayPurchase.');
@@ -1597,9 +1595,22 @@ exports.verifyGooglePlayPurchase = onCall({
   }
 
   // 2. Play Developer API token verification
-  const rawServiceAccountKey = process.env.PLAY_BILLING_SERVICE_ACCOUNT_KEY;
+  let rawServiceAccountKey;
+  try {
+    const secretDoc = await db.collection('secrets').doc('play_billing').get();
+    if (secretDoc.exists) {
+      rawServiceAccountKey = secretDoc.data().value;
+    }
+  } catch (err) {
+    logger.error('Failed to read play_billing secret from Firestore:', err);
+  }
+
   if (!rawServiceAccountKey) {
-    logger.error('PLAY_BILLING_SERVICE_ACCOUNT_KEY secret is not configured.');
+    rawServiceAccountKey = process.env.PLAY_BILLING_SERVICE_ACCOUNT_KEY;
+  }
+
+  if (!rawServiceAccountKey) {
+    logger.error('PLAY_BILLING_SERVICE_ACCOUNT_KEY secret is not configured in Firestore or env.');
     throw new HttpsError('failed-precondition', 'Server is missing Google Play credentials.');
   }
 

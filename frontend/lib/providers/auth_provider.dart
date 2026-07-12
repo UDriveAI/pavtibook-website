@@ -16,6 +16,7 @@ class AuthProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   SubscriptionModel? _subscription;
+  String? _lastRegisteredOrgId;
 
   UserModel? get user => _user;
   OrganizationModel? get organization => _organization;
@@ -23,6 +24,7 @@ class AuthProvider with ChangeNotifier {
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
   SubscriptionModel? get subscription => _subscription;
+  String? get lastRegisteredOrgId => _lastRegisteredOrgId;
 
   Map<String, dynamic> _subConfig = {
     'monthly_price': 99,
@@ -220,9 +222,9 @@ class AuthProvider with ChangeNotifier {
         'id': orgId,
         'name': regData['orgName'],
         'type': regData['orgType'],
-        'contact_person': regData['contactPerson'],
-        'mobile': regData['orgMobile'],
-        'email': regData['orgEmail'],
+        'contact_person': regData['contactPerson'] ?? regData['adminName'],
+        'mobile': regData['orgMobile'] ?? regData['adminMobile'],
+        'email': regData['orgEmail'] ?? regData['adminEmail'],
         'address': regData['address'],
         'city': regData['city'],
         'state': regData['state'],
@@ -312,47 +314,76 @@ class AuthProvider with ChangeNotifier {
           '[REGISTER_FLOW] [STEP 3 SUCCESS] User document written successfully.');
 
       // 4. Create Subscription Doc in Firestore
-      await fetchSubscriptionConfig();
-      final subscriptionRef =
-          FirebaseFirestore.instance.collection('subscriptions').doc(orgId);
-      final defaultSub = {
-        'id': orgId,
-        'organizationId': orgId,
-        'plan': 'free_trial',
-        'receiptsUsed': 0,
-        'receiptLimit': _subConfig['free_trial_receipts'] ?? 10,
-        'usersUsed': 1,
-        'usersLimit': 1,
-        'renewalDate':
-            DateTime.now().add(const Duration(days: 30)).toIso8601String(),
-        'createdAt': DateTime.now().toIso8601String(),
-        'updatedAt': DateTime.now().toIso8601String(),
-      };
-      await subscriptionRef.set(defaultSub);
+      debugPrint('[REGISTER_FLOW] [STEP 4] Preparing subscription data...');
+      try {
+        await fetchSubscriptionConfig();
+        final subscriptionRef =
+            FirebaseFirestore.instance.collection('subscriptions').doc(orgId);
+        final defaultSub = {
+          'id': orgId,
+          'organizationId': orgId,
+          'plan': 'free_trial',
+          'receiptsUsed': 0,
+          'receiptLimit': _subConfig['free_trial_receipts'] ?? 10,
+          'usersUsed': 1,
+          'usersLimit': 1,
+          'renewalDate':
+              DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+          'createdAt': DateTime.now().toIso8601String(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+        await subscriptionRef.set(defaultSub);
+      } on FirebaseException catch (fe, stack) {
+        debugPrint('[REGISTER_FLOW] [STEP 4 FAILED] FirebaseException: ${fe.code} - ${fe.message}');
+        debugPrint('$stack');
+        throw FirebaseException(
+          plugin: fe.plugin,
+          code: fe.code,
+          message: '[Step 4 failed: ${fe.message}]',
+        );
+      }
       debugPrint('[REGISTER_FLOW] Subscription document written successfully.');
 
       // 5. Create Member Doc in Firestore
-      final memberRef = FirebaseFirestore.instance
-          .collection('organization_members')
-          .doc(uid);
-      await memberRef.set({
-        'id': uid,
-        'userId': uid,
-        'organizationId': orgId,
-        'name': regData['adminName'],
-        'mobile': regData['adminMobile'],
-        'role': 'owner',
-        'joinedAt': DateTime.now().toIso8601String(),
-      });
+      debugPrint('[REGISTER_FLOW] [STEP 5] Preparing member data...');
+      try {
+        final memberRef = FirebaseFirestore.instance
+            .collection('organization_members')
+            .doc(uid);
+        await memberRef.set({
+          'id': uid,
+          'userId': uid,
+          'organizationId': orgId,
+          'name': regData['adminName'],
+          'mobile': regData['adminMobile'],
+          'role': 'owner',
+          'joinedAt': DateTime.now().toIso8601String(),
+        });
+      } on FirebaseException catch (fe, stack) {
+        debugPrint('[REGISTER_FLOW] [STEP 5 FAILED] FirebaseException: ${fe.code} - ${fe.message}');
+        debugPrint('$stack');
+        throw FirebaseException(
+          plugin: fe.plugin,
+          code: fe.code,
+          message: '[Step 5 failed: ${fe.message}]',
+        );
+      }
       debugPrint('[REGISTER_FLOW] Member document written successfully.');
 
-      // Sign out since we are redirecting the user to log in manually on the Login Screen
-      debugPrint(
-          '[REGISTER_FLOW] Signing out of Auth session to prepare for manual login redirection...');
-      await FirebaseAuth.instance.signOut();
+      _lastRegisteredOrgId = orgId;
 
-      _user = null;
-      _organization = null;
+      // Automatically load the local profile models so user is logged in
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        _user = UserModel.fromJson(userDoc.data()!);
+        final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+        if (orgDoc.exists) {
+          _organization = OrganizationModel.fromJson(orgDoc.data()!);
+          await fetchSubscriptionConfig();
+          await loadSubscription(orgId);
+        }
+      }
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -377,23 +408,11 @@ class AuthProvider with ChangeNotifier {
       }
 
       if (e is FirebaseAuthException) {
-        if (e.code == 'email-already-in-use') {
-          _errorMessage = 'An account with this email already exists.';
-        } else if (e.code == 'weak-password') {
-          _errorMessage = 'The password is too weak. Please use a stronger password.';
-        } else if (e.code == 'invalid-email') {
-          _errorMessage = 'The email address is invalid.';
-        } else {
-          _errorMessage = e.message ?? 'Registration failed. Please try again.';
-        }
+        _errorMessage = 'Auth failed: [${e.code}] ${e.message}';
       } else if (e is FirebaseException) {
-        if (e.code == 'permission-denied') {
-          _errorMessage = 'Unable to create account. Please try again.';
-        } else {
-          _errorMessage = e.message ?? 'Database setup failed. Please try again.';
-        }
+        _errorMessage = 'Database failed: [${e.code}] ${e.message}';
       } else {
-        _errorMessage = 'Unable to complete registration. Please try again.';
+        _errorMessage = 'General failed: ${e.toString()}';
       }
     }
 
@@ -1079,6 +1098,40 @@ class AuthProvider with ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = 'An unexpected error occurred. Please try again.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  // Update post-registration onboarding details
+  Future<bool> updateOnboardingDetails(String orgId, Map<String, dynamic> onboardingData) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final orgRef = FirebaseFirestore.instance.collection('organizations').doc(orgId);
+      await orgRef.update({
+        'upi_id': onboardingData['upiId'],
+        'contact_person': onboardingData['contactPerson'],
+        'address': onboardingData['address'],
+        'city': onboardingData['city'],
+        'state': onboardingData['state'],
+        'pincode': onboardingData['pincode'],
+        'registration_number': onboardingData['registrationNumber'],
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await reloadProfile();
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } on FirebaseException catch (e) {
+      _errorMessage = 'Failed to update details: [${e.code}] ${e.message}';
+    } catch (e) {
+      _errorMessage = 'Failed to update details: ${e.toString()}';
     }
 
     _isLoading = false;
