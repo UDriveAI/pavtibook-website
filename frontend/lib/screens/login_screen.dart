@@ -297,8 +297,8 @@ class _LoginScreenState extends State<LoginScreen>
                             const SizedBox(height: 24),
 
                             // Tab Views
-                            SizedBox(
-                              height: 190,
+                             SizedBox(
+                              height: 240,
                               child: TabBarView(
                                 controller: _tabController,
                                 children: [
@@ -368,11 +368,26 @@ class _LoginScreenState extends State<LoginScreen>
                                             fillColor: Colors.white,
                                             filled: true,
                                           ),
-                                          validator: (val) => val == null ||
-                                                  val.length < 6
-                                              ? 'Password must be at least 6 characters'
-                                              : null,
-                                        ),
+                                           validator: (val) => val == null ||
+                                                   val.length < 6
+                                               ? 'Password must be at least 6 characters'
+                                               : null,
+                                         ),
+                                         const SizedBox(height: 8),
+                                         Align(
+                                           alignment: Alignment.centerRight,
+                                           child: TextButton(
+                                             onPressed: _showForgotPasswordDialog,
+                                             child: const Text(
+                                               'Forgot Password?',
+                                               style: TextStyle(
+                                                 color: Color(0xFF8B1E2D),
+                                                 fontWeight: FontWeight.bold,
+                                                 fontSize: 12,
+                                               ),
+                                             ),
+                                           ),
+                                         ),
                                       ],
                                     ),
                                   ),
@@ -415,35 +430,19 @@ class _LoginScreenState extends State<LoginScreen>
                                                 fontSize: 13),
                                           ),
                                           validator: (val) => val == null ||
-                                                  val.length < 10
-                                              ? 'Enter a valid 10-digit number'
-                                              : null,
-                                        ),
-                                       const SizedBox(height: 12),
-                            if (_tabController.index == 0)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: _showForgotPasswordDialog,
-                                  child: const Text(
-                                    'Forgot Password?',
-                                    style: TextStyle(
-                                      color: Color(0xFF8B1E2D),
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            const SizedBox(height: 12),
-                                        const Text(
-                                          '* Note: Mobile OTP login is disabled in Firebase real testing mode. Please use Email & Password instead.',
-                                          style: TextStyle(
-                                            color: Colors.blueGrey,
-                                            fontSize: 10,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
+                                                   val.length < 10
+                                               ? 'Enter a valid 10-digit number'
+                                               : null,
+                                         ),
+                                         const SizedBox(height: 12),
+                                         const Text(
+                                           '* Note: Mobile OTP login uses Firebase Phone Authentication. For closed testing, please use your configured test phone numbers.',
+                                           style: TextStyle(
+                                             color: Colors.blueGrey,
+                                             fontSize: 10,
+                                             fontStyle: FontStyle.italic,
+                                           ),
+                                         ),
                                       ],
                                     ),
                                   ),

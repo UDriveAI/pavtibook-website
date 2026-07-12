@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -467,23 +468,133 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
-  // Request Mobile OTP login - Disabled in Firebase mode
+  String? _verificationId;
+
+  // Request Mobile OTP login
   Future<bool> requestOtp(String mobile) async {
     _isLoading = true;
-    _errorMessage =
-        'Mobile OTP login is disabled. Please use Email & Password.';
+    _errorMessage = null;
     notifyListeners();
-    _isLoading = false;
-    notifyListeners();
-    return false;
+
+    final completer = Completer<bool>();
+    String phone = mobile.trim();
+    if (phone.length == 10 && !phone.startsWith('+')) {
+      phone = '+91$phone';
+    }
+
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phone,
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          try {
+            final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+            final uid = authResult.user!.uid;
+            
+            final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+            if (userDoc.exists) {
+              final userData = userDoc.data()!;
+              _user = UserModel.fromJson(userData);
+              final orgId = userData['organization_id'] ?? userData['organizationId'];
+              if (orgId != null) {
+                final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+                if (orgDoc.exists) {
+                  _organization = OrganizationModel.fromJson(orgDoc.data()!);
+                  await fetchSubscriptionConfig();
+                  await loadSubscription(orgId);
+                }
+              }
+              _isLoading = false;
+              notifyListeners();
+              if (!completer.isCompleted) completer.complete(true);
+            } else {
+              _errorMessage = 'User profile not found.';
+              _isLoading = false;
+              notifyListeners();
+              if (!completer.isCompleted) completer.complete(false);
+            }
+          } catch (e) {
+            _errorMessage = e.toString();
+            _isLoading = false;
+            notifyListeners();
+            if (!completer.isCompleted) completer.complete(false);
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          _errorMessage = e.message ?? 'Phone verification failed.';
+          _isLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete(false);
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          _verificationId = verificationId;
+          _isLoading = false;
+          notifyListeners();
+          if (!completer.isCompleted) completer.complete(true);
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _verificationId = verificationId;
+        },
+        timeout: const Duration(seconds: 60),
+      );
+      
+      return completer.future;
+    } catch (e) {
+      _errorMessage = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
   }
 
-  // Verify Mobile OTP code - Disabled in Firebase mode
+  // Verify Mobile OTP code
   Future<bool> verifyOtp(String mobile, String otp) async {
+    if (_verificationId == null) {
+      _errorMessage = 'Verification session expired. Please request OTP again.';
+      return false;
+    }
+
     _isLoading = true;
-    _errorMessage =
-        'Mobile OTP login is disabled. Please use Email & Password.';
+    _errorMessage = null;
     notifyListeners();
+
+    try {
+      final credential = PhoneAuthProvider.credential(
+        verificationId: _verificationId!,
+        smsCode: otp,
+      );
+
+      final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
+      final uid = authResult.user!.uid;
+
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        _user = UserModel.fromJson(userData);
+        final orgId = userData['organization_id'] ?? userData['organizationId'];
+        if (orgId != null) {
+          final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+          if (orgDoc.exists) {
+            _organization = OrganizationModel.fromJson(orgDoc.data()!);
+            await fetchSubscriptionConfig();
+            await loadSubscription(orgId);
+          }
+        }
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = 'User profile not found.';
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'invalid-verification-code') {
+        _errorMessage = 'Invalid verification code.';
+      } else {
+        _errorMessage = e.message ?? 'OTP verification failed.';
+      }
+    } catch (e) {
+      _errorMessage = 'An unexpected error occurred.';
+    }
+
     _isLoading = false;
     notifyListeners();
     return false;
