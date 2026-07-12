@@ -96,7 +96,10 @@ service cloud.firestore {
       allow create: if isOrgAdmin(subId) || (
         isSignedIn() && 
         subId == request.resource.data.organizationId && 
-        request.resource.data.plan == 'free_trial'
+        request.resource.data.plan == 'free_trial' &&
+        request.resource.data.receiptsUsed == 0 &&
+        request.resource.data.usersUsed == 1 &&
+        request.resource.data.usersLimit == 1
       );
       allow update: if isOrgAdmin(subId) || (
         isSignedIn() && 
