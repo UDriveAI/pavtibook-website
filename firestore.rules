@@ -115,7 +115,7 @@ service cloud.firestore {
 
     match /organization_members/{memberId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && (isOrgAdmin(request.resource.data.organizationId) || request.auth.uid == memberId);
+      allow create: if isSignedIn() && (request.auth.uid == memberId || isOrgAdmin(request.resource.data.organizationId));
       allow update: if isSignedIn() && (
         isOrgAdmin(resource.data.organizationId) || 
         (request.auth.uid == memberId && request.resource.data.role == resource.data.role && request.resource.data.organizationId == resource.data.organizationId)
@@ -154,10 +154,6 @@ service cloud.firestore {
       allow read: if isSignedIn() && isOrgMember(resource.data.organizationId);
       allow create: if isSignedIn() && isOrgMember(request.resource.data.organizationId);
       allow update, delete: if false;
-    }
-
-    match /secrets/{secretId} {
-      allow read, write: if false;
     }
   }
 }
