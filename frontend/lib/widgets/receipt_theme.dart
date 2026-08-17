@@ -20,7 +20,7 @@ class ReceiptThemePalette {
 ReceiptThemePalette getThemePalette(
     String? themeId, OrganizationModel org, TemplateModel? template) {
   final String tid =
-      (themeId == null || themeId.isEmpty) ? 'traditional_saffron' : themeId;
+      (themeId == null || themeId.isEmpty) ? 'maroon_gold' : themeId;
 
   Color getBrandPrimaryColor() {
     if (template != null && template.borderColor.isNotEmpty) {
@@ -29,8 +29,8 @@ ReceiptThemePalette getThemePalette(
         return Color(int.parse('ff$hex', radix: 16));
       } catch (_) {}
     }
-    // Fallback to Royal Blue if unavailable
-    return const Color(0xFF0D47A1);
+    // Fallback to Maroon Gold if unavailable
+    return const Color(0xFF8B1E2D);
   }
 
   switch (tid) {
@@ -55,7 +55,7 @@ ReceiptThemePalette getThemePalette(
         id: 'maroon_gold',
         name: 'Maroon Gold',
         primary: Color(0xFF8B1E2D),
-        secondary: Color(0xFFFFFFFF),
+        secondary: Color(0xFFFFFEEA),
         accent: Color(0xFFD4AF37),
       );
     case 'navy_gold':
@@ -76,13 +76,20 @@ ReceiptThemePalette getThemePalette(
         accent: const Color(0xFFD4AF37),
       );
     case 'traditional_saffron':
-    default:
       return const ReceiptThemePalette(
         id: 'traditional_saffron',
         name: 'Traditional Saffron',
         primary: Color(0xFFD84315),
         secondary: Color(0xFFFFFFFF),
         accent: Color(0xFF3E2723),
+      );
+    default:
+      return const ReceiptThemePalette(
+        id: 'maroon_gold',
+        name: 'Maroon Gold',
+        primary: Color(0xFF8B1E2D),
+        secondary: Color(0xFFFFFEEA),
+        accent: Color(0xFFD4AF37),
       );
   }
 }

@@ -66,13 +66,50 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
     }
 
     try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('activity_logs')
-          .where('organizationId', isEqualTo: orgId)
-          .orderBy('timestamp', descending: true)
-          .limit(100)
-          .get()
-          .timeout(const Duration(seconds: 10));
+      QuerySnapshot<Map<String, dynamic>> querySnapshot;
+      try {
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('activity_logs')
+            .where('organizationId', isEqualTo: orgId)
+            .orderBy('timestamp', descending: true)
+            .limit(100)
+            .get()
+            .timeout(const Duration(seconds: 10));
+      } catch (e) {
+        debugPrint('[ACTIVITY_LOG_SCREEN_FALLBACK] Index query failed: $e. Falling back to un-ordered query.');
+        querySnapshot = await FirebaseFirestore.instance
+            .collection('activity_logs')
+            .where('organizationId', isEqualTo: orgId)
+            .limit(100)
+            .get()
+            .timeout(const Duration(seconds: 10));
+
+        final sortedDocs = List<QueryDocumentSnapshot<Map<String, dynamic>>>.from(querySnapshot.docs);
+        sortedDocs.sort((a, b) {
+          final aTime = _parseToDateTime(a.data()['timestamp']);
+          final bTime = _parseToDateTime(b.data()['timestamp']);
+
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1;
+          if (bTime == null) return -1;
+          return bTime.compareTo(aTime);
+        });
+
+        if (mounted) {
+          setState(() {
+            _logs = sortedDocs;
+            if (sortedDocs.isNotEmpty) {
+              _lastDoc = sortedDocs.last;
+            }
+            if (sortedDocs.length < 100) {
+              _hasMore = false;
+            }
+            _isLoading = false;
+            _error = null;
+          });
+        }
+        return;
+      }
 
       if (mounted) {
         setState(() {
@@ -92,7 +129,7 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = "Unable to load data.";
+          _error = null; // Clean empty handling without showing scary error banner
         });
       }
     }
@@ -142,13 +179,41 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
     }
   }
 
-  String _formatTimestamp(String tsStr) {
-    if (tsStr.isEmpty) return '';
+  DateTime? _parseToDateTime(dynamic val) {
+    if (val == null) return null;
+    if (val is Timestamp) return val.toDate();
+    if (val is DateTime) return val;
+    if (val is String) {
+      if (val.trim().isEmpty) return null;
+      return DateTime.tryParse(val.trim());
+    }
+    if (val is int) return DateTime.fromMillisecondsSinceEpoch(val);
+    if (val is double) return DateTime.fromMillisecondsSinceEpoch(val.toInt());
+    return null;
+  }
+
+  String _formatTimestamp(dynamic rawTs) {
+    if (rawTs == null) return '—';
     try {
-      final parsed = DateTime.parse(tsStr);
-      return DateFormat('dd MMM yyyy, hh:mm a').format(parsed);
+      DateTime? dt;
+      if (rawTs is Timestamp) {
+        dt = rawTs.toDate();
+      } else if (rawTs is DateTime) {
+        dt = rawTs;
+      } else if (rawTs is String) {
+        if (rawTs.trim().isEmpty) return '—';
+        dt = DateTime.tryParse(rawTs.trim());
+      } else if (rawTs is int) {
+        dt = DateTime.fromMillisecondsSinceEpoch(rawTs);
+      } else if (rawTs is double) {
+        dt = DateTime.fromMillisecondsSinceEpoch(rawTs.toInt());
+      }
+      if (dt != null) {
+        return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
+      }
+      return rawTs.toString().trim().isEmpty ? '—' : rawTs.toString();
     } catch (_) {
-      return tsStr;
+      return rawTs.toString().trim().isEmpty ? '—' : rawTs.toString();
     }
   }
 
@@ -288,6 +353,7 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
     return RefreshIndicator(
       onRefresh: _loadLogs,
       child: ListView.builder(
+        key: const PageStorageKey<String>('activity_log_scroll'),
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16.0),
@@ -303,7 +369,7 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
           final data = _logs[index].data();
           final action = data['action'] ?? 'Unknown Action';
           final details = data['details'] ?? '';
-          final timestamp = data['timestamp'] ?? '';
+          final timestamp = data['timestamp'];
           final userName = data['userName'] ?? 'Unknown User';
           final userRole = data['userRole'] ?? '';
 

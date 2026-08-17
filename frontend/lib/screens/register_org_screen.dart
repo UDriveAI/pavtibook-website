@@ -61,6 +61,22 @@ class _RegisterOrgScreenState extends State<RegisterOrgScreen> {
   String _selectedState = 'Maharashtra';
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (auth.user != null) {
+        if (auth.user!.email.isNotEmpty && _adminEmailController.text.isEmpty) {
+          _adminEmailController.text = auth.user!.email;
+        }
+        if (auth.user!.name.isNotEmpty && _adminNameController.text.isEmpty) {
+          _adminNameController.text = auth.user!.name;
+        }
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _orgNameController.dispose();
     _adminNameController.dispose();
@@ -79,6 +95,7 @@ class _RegisterOrgScreenState extends State<RegisterOrgScreen> {
   }
 
   Future<void> _handleStep1Submit() async {
+    if (_isProcessing) return;
     if (!_formKey1.currentState!.validate()) return;
 
     setState(() => _isProcessing = true);
@@ -112,6 +129,7 @@ class _RegisterOrgScreenState extends State<RegisterOrgScreen> {
   }
 
   Future<void> _handleStep2Submit() async {
+    if (_isProcessing) return;
     if (!_formKey2.currentState!.validate()) return;
 
     setState(() => _isProcessing = true);
@@ -166,8 +184,6 @@ class _RegisterOrgScreenState extends State<RegisterOrgScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     // Maroon input decoration borders
     final borderStyle = OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),

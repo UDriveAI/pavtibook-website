@@ -4,581 +4,26 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
-import 'package:firebase_core/firebase_core.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/data_providers.dart';
 import '../models/models.dart';
 import '../widgets/traditional_receipt_widget.dart';
-import '../widgets/receipt_theme.dart';
 import '../services/subscription_service.dart';
 import '../services/payment_service.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'receipt_customize_screen.dart';
 
 // ============================================================================
-// 1. RECEIPT CUSTOMIZATION SCREEN
+// 1. RECEIPT CUSTOMIZATION SCREEN (Delegates to Universal Receipt Customize Screen)
 // ============================================================================
-class ReceiptCustomizationScreen extends StatefulWidget {
+class ReceiptCustomizationScreen extends StatelessWidget {
   const ReceiptCustomizationScreen({super.key});
 
   @override
-  State<ReceiptCustomizationScreen> createState() =>
-      _ReceiptCustomizationScreenState();
-}
-
-class _ReceiptCustomizationScreenState
-    extends State<ReceiptCustomizationScreen> {
-  final _footerController = TextEditingController();
-  bool _isSaving = false;
-  final ImagePicker _picker = ImagePicker();
-  String? _selectedThemeId;
-
-  @override
-  void initState() {
-    super.initState();
-    final org = Provider.of<AuthProvider>(context, listen: false).organization;
-    if (org != null) {
-      _footerController.text = org.footerText ?? '';
-      _selectedThemeId = org.receiptThemeId ?? 'traditional_saffron';
-    }
-    Future.delayed(Duration.zero, () {
-      if (mounted) {
-        Provider.of<TemplateProvider>(context, listen: false).fetchTemplates();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _footerController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickAndUploadImage(String fieldName) async {
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final orgId = auth.organization?.id;
-    if (orgId == null) return;
-
-    try {
-      final XFile? image = await _picker.pickImage(
-          source: ImageSource.gallery, imageQuality: 85);
-      if (image == null) return;
-
-      setState(() => _isSaving = true);
-
-      // Upload to Firebase Storage
-      final file = File(image.path);
-      final storage = FirebaseStorage.instance;
-      final ref = storage
-          .ref()
-          .child('organizations')
-          .child(orgId)
-          .child('$fieldName.png');
-
-      // Before upload logging
-      debugPrint(
-          'FIREBASE CONFIG PROJECT_ID: ${Firebase.app().options.projectId}');
-      debugPrint(
-          'FIREBASE CONFIG STORAGE_BUCKET: ${Firebase.app().options.storageBucket}');
-      debugPrint('FIREBASE STORAGE IMAGE UPLOAD START:');
-      debugPrint('  Bucket: ${storage.bucket}');
-      debugPrint('  Target Path: ${ref.fullPath}');
-      debugPrint('  Local Source File: ${file.path}');
-
-      final UploadTask uploadTask = ref.putFile(file);
-      final TaskSnapshot snapshot = await uploadTask;
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-
-      // After upload logging
-      debugPrint('FIREBASE STORAGE IMAGE UPLOAD SUCCESS:');
-      debugPrint('  Download URL: $downloadUrl');
-
-      // Update Firestore organization details
-      await FirebaseFirestore.instance
-          .collection('organizations')
-          .doc(orgId)
-          .update({
-        fieldName: downloadUrl,
-      });
-
-      await auth.reloadProfile();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  '${fieldName.replaceAll('_', ' ').toUpperCase()} updated successfully!')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
-      }
-    } finally {
-      setState(() => _isSaving = false);
-    }
-  }
-
-  Future<void> _saveFooterText() async {
-    setState(() => _isSaving = true);
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final orgId = auth.organization?.id;
-
-    try {
-      if (orgId != null) {
-        await FirebaseFirestore.instance
-            .collection('organizations')
-            .doc(orgId)
-            .update({
-          'footer_text': _footerController.text.trim(),
-        });
-        await auth.reloadProfile();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Footer text updated successfully!')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save footer: $e')),
-        );
-      }
-    } finally {
-      setState(() => _isSaving = false);
-    }
-  }
-
-  Future<void> _saveReceiptTheme() async {
-    setState(() => _isSaving = true);
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final orgId = auth.organization?.id;
-
-    try {
-      if (orgId != null && _selectedThemeId != null) {
-        await FirebaseFirestore.instance
-            .collection('organizations')
-            .doc(orgId)
-            .update({
-          'receipt_theme_id': _selectedThemeId,
-        });
-        await auth.reloadProfile();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Receipt theme saved successfully!')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save theme: $e')),
-        );
-      }
-    } finally {
-      setState(() => _isSaving = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final org = Provider.of<AuthProvider>(context).organization;
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Receipt Customization'),
-      ),
-      backgroundColor: theme.colorScheme.surface,
-      body: _isSaving
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Customize Receipt Aesthetics',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Upload branding graphics and customize labels to dynamically render on digital and print receipts.',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 13),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Image Upload Cards
-                  _buildUploadCard(
-                    title: 'Header Logo',
-                    subtitle: 'Used at the top center of receipts',
-                    imageUrl: org?.logoUrl,
-                    onTap: () => _pickAndUploadImage('logo_url'),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildUploadCard(
-                    title: 'Left Side Image',
-                    subtitle: 'Deity or Trust Logo (Ganpati / Temple)',
-                    imageUrl: org?.leftSideImageUrl,
-                    onTap: () => _pickAndUploadImage('left_side_image_url'),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildUploadCard(
-                    title: 'Right Side Image / Stamp',
-                    subtitle: 'Organization Stamp / Bhagwa Flag / Symbol',
-                    imageUrl: org?.rightSideImageUrl,
-                    onTap: () => _pickAndUploadImage('right_side_image_url'),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Footer Text Input
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Footer Text',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _footerController,
-                            decoration: const InputDecoration(
-                              hintText:
-                                  'e.g. Ganpati Bappa Morya / Powered by PavtiBook',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _saveFooterText,
-                            child: const Text('Save Footer Text'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Receipt Theme Card
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Receipt Theme',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 14),
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            value: _selectedThemeId,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 8),
-                            ),
-                            items: const [
-                              DropdownMenuItem(
-                                  value: 'traditional_saffron',
-                                  child: Text('Traditional Saffron')),
-                              DropdownMenuItem(
-                                  value: 'royal_blue',
-                                  child: Text('Royal Blue')),
-                              DropdownMenuItem(
-                                  value: 'emerald_green',
-                                  child: Text('Emerald Green')),
-                              DropdownMenuItem(
-                                  value: 'maroon_gold',
-                                  child: Text('Maroon Gold')),
-                              DropdownMenuItem(
-                                  value: 'navy_gold', child: Text('Navy Gold')),
-                              DropdownMenuItem(
-                                  value: 'brand_theme',
-                                  child: Text('Brand Theme')),
-                            ],
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedThemeId = val;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton(
-                            onPressed: _saveReceiptTheme,
-                            child: const Text('Save Theme'),
-                          ),
-                          const SizedBox(height: 16),
-                          (() {
-                            final tempProvider =
-                                Provider.of<TemplateProvider>(context);
-                            TemplateModel? activeTemplate;
-                            if (tempProvider.templates.isNotEmpty) {
-                              activeTemplate =
-                                  tempProvider.templates.firstWhere(
-                                (t) => t.isDefault,
-                                orElse: () => tempProvider.templates.first,
-                              );
-                            }
-                            final palette = getThemePalette(
-                                _selectedThemeId,
-                                org ??
-                                    OrganizationModel(
-                                        id: '',
-                                        name: 'Organization',
-                                        type: 'trust',
-                                        upiId: '',
-                                        isVerified: false,
-                                        subscriptionPlan: 'free'),
-                                activeTemplate);
-
-                            return Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFFBEF),
-                                border: Border.all(
-                                    color: palette.primary.withOpacity(0.3),
-                                    width: 1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  const Text(
-                                    'Live Theme Preview',
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blueGrey),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 8),
-
-                                  // Header Preview
-                                  Container(
-                                    color: palette.primary,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 6, horizontal: 8),
-                                    alignment: Alignment.center,
-                                    child: Column(
-                                      children: [
-                                        Text(
-                                          org?.name ?? 'ORGANIZATION NAME',
-                                          style: const TextStyle(
-                                            color: Color(0xFFFFEE58),
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 1),
-                                        const Text(
-                                          '॥ श्री गणेश प्रसन्न ॥',
-                                          style: TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 6.5,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-
-                                  // Amount & Signature Row
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      // Amount Box Preview
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                              color: palette.primary,
-                                              width: 1.5),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                          color: Colors.white,
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(1),
-                                              decoration: BoxDecoration(
-                                                color: palette.primary,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              child: const Text(
-                                                '₹',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 6,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              '1,001/-',
-                                              style: TextStyle(
-                                                color: palette.primary,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-
-                                      // Signature Line Preview
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: 50,
-                                            height: 0.8,
-                                            color: palette.accent,
-                                          ),
-                                          const SizedBox(height: 2),
-                                          const Text(
-                                            'Signature Accent',
-                                            style: TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 6,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          })(),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ── Preview Receipt Button ──
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              ChangeNotifierProvider<TemplateProvider>.value(
-                            value: Provider.of<TemplateProvider>(context,
-                                listen: false),
-                            child: const ReceiptCustomizationPreviewScreen(),
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.visibility),
-                    label: const Text('Preview Receipt'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8B1E2D),
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size.fromHeight(48),
-                      textStyle: const TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Preview how your receipt will look with current branding settings.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildUploadCard({
-    required String title,
-    required String subtitle,
-    required String? imageUrl,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Text(subtitle,
-                      style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: onTap,
-                    icon: const Icon(Icons.upload),
-                    label: const Text('Upload PNG'),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-                color: Colors.white,
-              ),
-              child: imageUrl != null && imageUrl.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: (() {
-                        debugPrint(
-                            'ReceiptCustomizationScreen rendering image URL: $imageUrl');
-                        return Image.network(
-                          imageUrl,
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) {
-                            debugPrint(
-                                'ReceiptCustomizationScreen failed to load image: $error');
-                            return const Center(
-                              child: Icon(Icons.broken_image,
-                                  color: Colors.grey, size: 32),
-                            );
-                          },
-                        );
-                      })(),
-                    )
-                  : const Center(
-                      child: Icon(Icons.image, color: Colors.grey, size: 32),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return const ReceiptCustomizeScreen();
   }
 }
 
@@ -597,10 +42,13 @@ class _AuthorizedSignaturesScreenState
     extends State<AuthorizedSignaturesScreen> {
   bool _isSaving = false;
   final ImagePicker _picker = ImagePicker();
-
   final _presidentNameController = TextEditingController();
   final _treasurerNameController = TextEditingController();
-  final _memberNameController = TextEditingController();
+  final _secretaryNameController = TextEditingController();
+
+  double _presidentSigScale = 1.0;
+  double _treasurerSigScale = 1.0;
+  double _secretarySigScale = 1.0;
 
   @override
   void initState() {
@@ -609,7 +57,10 @@ class _AuthorizedSignaturesScreenState
     if (org != null) {
       _presidentNameController.text = org.presidentName ?? '';
       _treasurerNameController.text = org.treasurerName ?? '';
-      _memberNameController.text = org.memberName ?? '';
+      _secretaryNameController.text = org.secretaryName ?? '';
+      _presidentSigScale = org.presidentSignatureScale;
+      _treasurerSigScale = org.treasurerSignatureScale;
+      _secretarySigScale = org.secretarySignatureScale;
     }
   }
 
@@ -617,7 +68,7 @@ class _AuthorizedSignaturesScreenState
   void dispose() {
     _presidentNameController.dispose();
     _treasurerNameController.dispose();
-    _memberNameController.dispose();
+    _secretaryNameController.dispose();
     super.dispose();
   }
 
@@ -633,23 +84,26 @@ class _AuthorizedSignaturesScreenState
             .update({
           'president_name': _presidentNameController.text.trim(),
           'treasurer_name': _treasurerNameController.text.trim(),
-          'member_name': _memberNameController.text.trim(),
+          'secretary_name': _secretaryNameController.text.trim(),
           'president_designation': 'President',
           'treasurer_designation': 'Treasurer',
-          'member_designation': 'Member (Sadasya)',
+          'secretary_designation': 'Secretary',
+          'president_signature_scale': _presidentSigScale,
+          'treasurer_signature_scale': _treasurerSigScale,
+          'secretary_signature_scale': _secretarySigScale,
         });
         await auth.reloadProfile();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('Authorized person names updated successfully!')),
+                content: Text('Authorized person details and signature sizes updated successfully!')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save names: $e')),
+          SnackBar(content: Text('Failed to save details: $e')),
         );
       }
     } finally {
@@ -678,7 +132,6 @@ class _AuthorizedSignaturesScreenState
           .child(orgId)
           .child('$fieldName.png');
 
-      // Before upload logging
       debugPrint('FIREBASE STORAGE SIGNATURE UPLOAD START:');
       debugPrint('  Bucket: ${storage.bucket}');
       debugPrint('  Target Path: ${ref.fullPath}');
@@ -688,7 +141,6 @@ class _AuthorizedSignaturesScreenState
       final TaskSnapshot snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
 
-      // After upload logging
       debugPrint('FIREBASE STORAGE SIGNATURE UPLOAD SUCCESS:');
       debugPrint('  Download URL: $downloadUrl');
 
@@ -719,6 +171,41 @@ class _AuthorizedSignaturesScreenState
     }
   }
 
+  Future<void> _removeSignature(String fieldName) async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final orgId = auth.organization?.id;
+    if (orgId == null) return;
+
+    try {
+      setState(() => _isSaving = true);
+      await FirebaseFirestore.instance
+          .collection('organizations')
+          .doc(orgId)
+          .update({
+        fieldName: null,
+      });
+
+      await auth.reloadProfile();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${fieldName.replaceAll('_', ' ').toUpperCase()} removed successfully.'),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to remove signature: $e')),
+        );
+      }
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final org = Provider.of<AuthProvider>(context).organization;
@@ -732,17 +219,18 @@ class _AuthorizedSignaturesScreenState
       body: _isSaving
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
+              key: const PageStorageKey<String>('authorized_signatures_scroll'),
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Text(
-                    'Manage Authorized Persons',
+                    'Manage Authorized Persons & Signatures',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Manage the names and digital signatures of your office bearers. These are automatically loaded during receipt generation.',
+                    'Single place to manage office bearers\' names, signatures and signature sizes. These apply to live preview, shared images and PDF receipts.',
                     style: TextStyle(color: Colors.grey[600], fontSize: 13),
                   ),
                   const SizedBox(height: 20),
@@ -750,23 +238,36 @@ class _AuthorizedSignaturesScreenState
                     role: 'President',
                     imageUrl: org?.presidentSignatureUrl,
                     controller: _presidentNameController,
+                    scale: _presidentSigScale,
+                    onScaleChanged: (val) => setState(() => _presidentSigScale = val),
                     onTap: () =>
                         _pickAndUploadSignature('president_signature_url'),
+                    onRemove: () =>
+                        _removeSignature('president_signature_url'),
                   ),
                   const SizedBox(height: 12),
                   _buildSignatureCard(
                     role: 'Treasurer',
                     imageUrl: org?.treasurerSignatureUrl,
                     controller: _treasurerNameController,
+                    scale: _treasurerSigScale,
+                    onScaleChanged: (val) => setState(() => _treasurerSigScale = val),
                     onTap: () =>
                         _pickAndUploadSignature('treasurer_signature_url'),
+                    onRemove: () =>
+                        _removeSignature('treasurer_signature_url'),
                   ),
                   const SizedBox(height: 12),
                   _buildSignatureCard(
-                    role: 'Member (Sadasya)',
-                    imageUrl: org?.agentSignatureUrl,
-                    controller: _memberNameController,
-                    onTap: () => _pickAndUploadSignature('agent_signature_url'),
+                    role: 'Secretary',
+                    imageUrl: org?.secretarySignatureUrl,
+                    controller: _secretaryNameController,
+                    scale: _secretarySigScale,
+                    onScaleChanged: (val) => setState(() => _secretarySigScale = val),
+                    onTap: () =>
+                        _pickAndUploadSignature('secretary_signature_url'),
+                    onRemove: () =>
+                        _removeSignature('secretary_signature_url'),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
@@ -778,7 +279,7 @@ class _AuthorizedSignaturesScreenState
                       textStyle: const TextStyle(
                           fontSize: 15, fontWeight: FontWeight.bold),
                     ),
-                    child: const Text('Save Names'),
+                    child: const Text('Save All Changes'),
                   ),
                   const SizedBox(height: 30),
                 ],
@@ -791,9 +292,15 @@ class _AuthorizedSignaturesScreenState
     required String role,
     required String? imageUrl,
     required TextEditingController controller,
+    required double scale,
+    required ValueChanged<double> onScaleChanged,
     required VoidCallback onTap,
+    required VoidCallback onRemove,
   }) {
+    final bool hasImage = imageUrl != null && imageUrl.trim().isNotEmpty;
     return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -827,10 +334,25 @@ class _AuthorizedSignaturesScreenState
                       const Text('Upload transparent PNG signature',
                           style: TextStyle(color: Colors.grey, fontSize: 11)),
                       const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: onTap,
-                        icon: const Icon(Icons.edit),
-                        label: const Text('Replace Signature'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: onTap,
+                            icon: const Icon(Icons.edit, size: 16),
+                            label: Text(hasImage ? 'Replace Signature' : 'Upload Signature'),
+                          ),
+                          if (hasImage)
+                            OutlinedButton.icon(
+                              onPressed: onRemove,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                              ),
+                              icon: const Icon(Icons.delete_outline, size: 16),
+                              label: const Text('Remove'),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -844,30 +366,67 @@ class _AuthorizedSignaturesScreenState
                     borderRadius: BorderRadius.circular(4),
                     color: Colors.white,
                   ),
-                  child: imageUrl != null && imageUrl.isNotEmpty
+                  child: hasImage
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(4),
-                          child: (() {
-                            debugPrint(
-                                'AuthorizedSignaturesScreen rendering image URL: $imageUrl');
-                            return Image.network(
-                              imageUrl,
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                debugPrint(
-                                    'AuthorizedSignaturesScreen failed to load signature image: $error');
-                                return const Center(
-                                  child: Icon(Icons.broken_image,
-                                      color: Colors.grey, size: 28),
-                                );
-                              },
-                            );
-                          })(),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return const Center(
+                                child: Icon(Icons.broken_image,
+                                    color: Colors.grey, size: 28),
+                              );
+                            },
+                          ),
                         )
                       : const Center(
                           child:
-                              Icon(Icons.gesture, color: Colors.grey, size: 28),
+                              Icon(Icons.draw, color: Colors.grey, size: 28),
                         ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Signature Size',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline, color: Color(0xFF8B1E2D), size: 22),
+                      onPressed: scale > 0.5
+                          ? () => onScaleChanged((scale - 0.25).clamp(0.5, 3.0))
+                          : null,
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8B1E2D).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${(scale * 100).round()}%',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: Color(0xFF8B1E2D),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline, color: Color(0xFF8B1E2D), size: 22),
+                      onPressed: scale < 3.0
+                          ? () => onScaleChanged((scale + 0.25).clamp(0.5, 3.0))
+                          : null,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1808,13 +1367,21 @@ class ReceiptCustomizationPreviewScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final tempProvider = Provider.of<TemplateProvider>(context);
-    final org = auth.organization;
-
-    if (org == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
+    final org = auth.organization ?? OrganizationModel(
+      id: 'preview_org_id',
+      name: 'PavatiBook Trust & Public Foundation',
+      type: 'trust',
+      contactPerson: 'Rahul Kulkarni',
+      mobile: '9876543210',
+      email: 'info@pavtibook.online',
+      address: 'Kothrud, Pune, Maharashtra - 411038',
+      city: 'Pune',
+      state: 'Maharashtra',
+      pincode: '411038',
+      upiId: 'pavtibook@upi',
+      isVerified: true,
+      subscriptionPlan: 'free_trial',
+    );
 
     final sampleReceipt = _buildSampleReceipt(org);
 
@@ -2268,8 +1835,8 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Payment Failed'),
-          content: const Text('Please try again.'),
+          title: const Text('❌ Payment Failed'),
+          content: Text('${response.message}\n\nError Code: ${response.code}'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -2470,23 +2037,12 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
     }
 
     final sub = _sub!;
-    final config = _config!;
-
-    final planDisplayName = sub.plan == 'free_trial'
-        ? 'Free Trial'
-        : (sub.plan == 'monthly' || sub.plan == 'professional_monthly')
-            ? 'Professional Monthly'
-            : (sub.plan == 'yearly' || sub.plan == 'professional_yearly')
-                ? 'Professional Yearly'
-                : sub.plan == 'premium_monthly'
-                    ? 'Premium Monthly'
-                    : sub.plan == 'premium_yearly'
-                        ? 'Premium Yearly'
-                        : sub.plan.toUpperCase();
+    final planDisplayName = sub.planDetails.displayName;
 
     final used = sub.receiptsUsed;
-    final limit = sub.receiptLimit;
-    final ratio = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
+    final isUnlimited = sub.isUnlimitedReceipts;
+    final limit = sub.receiptLimit ?? 1;
+    final ratio = isUnlimited ? 0.0 : (used / limit).clamp(0.0, 1.0);
 
     final teamUsed = sub.usersUsed;
     final teamLimit = sub.usersLimit;
@@ -2494,9 +2050,10 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
         teamLimit > 0 ? (teamUsed / teamLimit).clamp(0.0, 1.0) : 0.0;
 
     int remainingDays = 0;
-    if (sub.renewalDate.isNotEmpty) {
+    bool isLifetimeFree = sub.renewalDate == null || sub.plan == 'free';
+    if (!isLifetimeFree && sub.renewalDate != null && sub.renewalDate!.isNotEmpty) {
       try {
-        final renewal = DateTime.parse(sub.renewalDate);
+        final renewal = DateTime.parse(sub.renewalDate!);
         remainingDays = renewal.difference(DateTime.now()).inDays;
         if (remainingDays < 0) remainingDays = 0;
       } catch (_) {}
@@ -2597,12 +2154,12 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
                     children: [
                       const Text('Receipts Used:',
                           style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text(sub.plan == 'free_trial' ? '$used / $limit' : '$used / Unlimited',
+                      Text(sub.isUnlimitedReceipts ? '$used / Unlimited' : '$used / ${sub.receiptLimit}',
                           style: const TextStyle(
                               fontSize: 13, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  if (sub.plan == 'free_trial') ...[
+                  if (!sub.isUnlimitedReceipts) ...[
                     const SizedBox(height: 6),
                     TweenAnimationBuilder<double>(
                       tween: Tween<double>(begin: 0.0, end: ratio),
@@ -2657,14 +2214,12 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        sub.plan == 'free_trial'
-                            ? 'Remaining Trial Days:'
-                            : 'Remaining Days:',
+                        isLifetimeFree ? 'Subscription Validity:' : 'Remaining Days:',
                         style:
                             const TextStyle(fontSize: 12, color: Colors.grey),
                       ),
                       Text(
-                        '$remainingDays Days',
+                        isLifetimeFree ? 'Lifetime Free' : '$remainingDays Days',
                         style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.bold,
@@ -2683,17 +2238,35 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
           ),
           const SizedBox(height: 12),
 
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _buildProfessionalPlanCard(context, sub, config),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildPremiumPlanCard(context, sub, config),
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final double width = constraints.maxWidth;
+              if (width < 500) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildProfessionalPlanCard(context, sub),
+                    const SizedBox(height: 16),
+                    _buildPremiumPlanCard(context, sub),
+                  ],
+                );
+              } else {
+                return IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildProfessionalPlanCard(context, sub),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildPremiumPlanCard(context, sub),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            },
           ),
           const SizedBox(height: 24),
           const Text(
@@ -2841,15 +2414,14 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
     );
   }
 
-  Widget _buildProfessionalPlanCard(BuildContext context, SubscriptionModel sub,
-      Map<String, dynamic> config) {
+  Widget _buildProfessionalPlanCard(BuildContext context, SubscriptionModel sub) {
     final isMonthlyActive = sub.plan == 'monthly' || sub.plan == 'professional_monthly';
     final isYearlyActive = sub.plan == 'yearly' || sub.plan == 'professional_yearly';
     final isProfessionalActive = isMonthlyActive || isYearlyActive;
-    final isPremiumActive = sub.plan == 'premium_monthly' || sub.plan == 'premium_yearly';
+    final isPremiumActive = sub.plan.contains('premium');
 
-    final monthlyPrice = config['monthly_price'] ?? 99;
-    final yearlyPrice = config['yearly_price'] ?? 999;
+    final monthlyPrice = 99;
+    final yearlyPrice = 999;
     final savings = (monthlyPrice * 12) - yearlyPrice;
 
     return Card(
@@ -2895,13 +2467,16 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Monthly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                    Text('₹$monthlyPrice / Month', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Monthly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      Text('₹$monthlyPrice / Month', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 if (isMonthlyActive)
                   _buildActiveBadge()
                 else if (isPremiumActive)
@@ -2926,23 +2501,28 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Text('Yearly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                        const SizedBox(width: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(4)),
-                          child: Text('Save ₹$savings', style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.green[800])),
-                        ),
-                      ],
-                    ),
-                    Text('₹$yearlyPrice / Year', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Text('Yearly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(4)),
+                              child: Text('Save ₹$savings', style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.green[800])),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text('₹$yearlyPrice / Year', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 if (isYearlyActive)
                   _buildActiveBadge()
                 else if (isPremiumActive)
@@ -2967,13 +2547,12 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
     );
   }
 
-  Widget _buildPremiumPlanCard(BuildContext context, SubscriptionModel sub,
-      Map<String, dynamic> config) {
+  Widget _buildPremiumPlanCard(BuildContext context, SubscriptionModel sub) {
     final isMonthlyActive = sub.plan == 'premium_monthly';
     final isYearlyActive = sub.plan == 'premium_yearly';
     final isPremiumActive = isMonthlyActive || isYearlyActive;
-    final monthlyPrice = config['premium_monthly_price'] ?? 199;
-    final yearlyPrice = config['premium_yearly_price'] ?? 1999;
+    final monthlyPrice = 199;
+    final yearlyPrice = 1999;
     final savings = (monthlyPrice * 12) - yearlyPrice;
 
     return Container(
@@ -3046,13 +2625,16 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Monthly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                      Text('₹$monthlyPrice / Month', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Monthly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                        Text('₹$monthlyPrice / Month', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   if (isMonthlyActive)
                     _buildActiveBadge()
                   else
@@ -3075,23 +2657,28 @@ class _SubscriptionUsageScreenState extends State<SubscriptionUsageScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Text('Yearly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
-                          const SizedBox(width: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(4)),
-                            child: Text('Save ₹$savings', style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.green[800])),
-                          ),
-                        ],
-                      ),
-                      Text('₹$yearlyPrice / Year', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text('Yearly Billing', style: TextStyle(fontSize: 10, color: Colors.grey)),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                decoration: BoxDecoration(color: Colors.green[100], borderRadius: BorderRadius.circular(4)),
+                                child: Text('Save ₹$savings', style: TextStyle(fontSize: 7, fontWeight: FontWeight.bold, color: Colors.green[800])),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text('₹$yearlyPrice / Year', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   if (isYearlyActive)
                     _buildActiveBadge()
                   else

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/auth_provider.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -37,8 +38,6 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkAuth() async {
-    // Wait for splash animation / base loading
-    await Future.delayed(const Duration(milliseconds: 1600));
     if (!mounted) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -46,6 +45,19 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
     if (authProvider.isAuthenticated) {
+      final prefs = await SharedPreferences.getInstance();
+      final lastRoute = prefs.getString('last_active_route');
+      if (lastRoute != null &&
+          lastRoute.isNotEmpty &&
+          lastRoute != '/' &&
+          lastRoute != '/login' &&
+          lastRoute != '/otp-verify' &&
+          lastRoute != '/register') {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, lastRoute);
+          return;
+        }
+      }
       if (mounted) Navigator.pushReplacementNamed(context, '/dashboard');
     } else {
       if (mounted) Navigator.pushReplacementNamed(context, '/login');

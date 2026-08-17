@@ -134,6 +134,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _refreshStats();
     _fetchPendingTransfer();
+
+    // Ensure user organizations list is loaded for multi-org detection
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    final uid = auth.user?.id;
+    if (uid != null) {
+      auth.loadUserOrganizations(uid);
+    }
     
     // Automatically query and restore active Google Play purchases silently
     PaymentService().restorePurchases().catchError((e) {
@@ -203,7 +210,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int membersCount = 0;
     int receiptsCount = 0;
     int donorsCount = 0;
-    String subscriptionPlan = 'Free Trial';
+    String subscriptionPlan = 'Free Plan';
 
     try {
       final membersSnap = await FirebaseFirestore.instance
@@ -232,7 +239,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .doc(orgId)
           .get();
       if (subSnap.exists) {
-        subscriptionPlan = subSnap.data()?['plan'] ?? 'free_trial';
+        subscriptionPlan = subSnap.data()?['plan'] ?? 'free';
       }
     } catch (e) {
       debugPrint('Error loading stats: $e');
@@ -502,9 +509,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _refreshStats() async {
     await Future.delayed(Duration.zero);
     if (!mounted) return;
+    final auth = Provider.of<AuthProvider>(context, listen: false);
     final dash = Provider.of<DashboardProvider>(context, listen: false);
     final rp = Provider.of<ReceiptProvider>(context, listen: false);
-    await dash.fetchStats();
+
+    final orgId = auth.activeOrganizationId ?? auth.organization?.id;
+    if (orgId != null) {
+      dash.initRealtimeDashboard(
+        orgId: orgId,
+        userRole: auth.activeUserRole,
+        uid: auth.user?.id ?? '',
+        generation: auth.switchGeneration,
+      );
+    } else {
+      await dash.fetchStats();
+    }
     await rp.fetchReceipts();
   }
 
@@ -667,14 +686,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  DateTime? _lastBackPressTime;
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final dash = Provider.of<DashboardProvider>(context);
     final rp = Provider.of<ReceiptProvider>(context);
 
-    final userRole = auth.user?.role ?? '';
-    final isOwner = userRole == 'admin' || userRole == 'owner';
+    final userRole = auth.activeUserRole.toLowerCase();
+    final isOwner = userRole == 'admin' || userRole == 'owner' || (auth.organization?.ownerUid == auth.user?.id);
     final isPresident = userRole == 'president';
     final isTreasurer = userRole == 'treasurer';
     final isMember = userRole == 'member' || userRole == 'collector';
@@ -682,7 +703,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final stats = dash.stats;
     final cards = stats != null;
     final recentReceipts = rp.receipts
-        .where((r) => isOwner || isPresident || r.collectorId == auth.user?.id)
+        .where((r) => isOwner || isPresident || isTreasurer || r.createdBy == auth.user?.id || r.collectorId == auth.user?.id)
         .take(5)
         .toList();
 
@@ -692,7 +713,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? 'Namaste, $userName'
         : 'Namaste';
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+          return;
+        }
+        final now = DateTime.now();
+        if (_lastBackPressTime == null ||
+            now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+          _lastBackPressTime = now;
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Press back again to exit'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFFFFF6E8), // Cream Background
       appBar: AppBar(
         backgroundColor: const Color(0xFF8B1E2D), // Primary Maroon
@@ -710,6 +754,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           fit: BoxFit.contain,
         ),
         actions: [
+          if (auth.hasMultipleOrganizations)
+            IconButton(
+              icon: const Icon(Icons.swap_horiz, color: Colors.white),
+              tooltip: 'Switch Organization',
+              onPressed: () {
+                Navigator.pushNamed(context, '/org-selector');
+              },
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: InkWell(
@@ -815,6 +867,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.pushNamed(context, '/donor-list');
+                },
+              ),
+            if (auth.hasMultipleOrganizations)
+              ListTile(
+                leading: const Icon(Icons.swap_horiz, color: Color(0xFF8B1E2D)),
+                title: const Text('Switch Organization',
+                    style: TextStyle(fontWeight: FontWeight.w500)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.pushNamed(context, '/org-selector');
                 },
               ),
             ListTile(
@@ -1384,6 +1446,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                     ],
+
+                    // ── MEMBER PERSONAL STATS (non-owner roles only) ──────
+                    if (!isOwner && !isPresident && !isTreasurer) ...[ 
+                      const SizedBox(height: 16),
+                      _buildMemberStatsCard(context, rp.receipts, auth.user?.id ?? ''),
+                    ],
+
+                    // ── TEAM PERFORMANCE CARD (owners only) ──────────────
+                    if (isOwner || isPresident) ...[ 
+                      const SizedBox(height: 16),
+                      _buildTeamPerformanceCard(context, rp.receipts),
+                    ],
+
                     const SizedBox(height: 20),
 
                     // Quick Actions Header
@@ -1641,11 +1716,577 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(
                         height:
                             100), // space to avoid floating action button overlap
+
+                    // ── RECENT ACTIVITY LOG (owners/presidents only) ──────
+                    if (isOwner || isPresident) ...[ 
+                      _buildRecentActivitySection(context, auth.organization?.id ?? ''),
+                      const SizedBox(height: 100),
+                    ],
                   ],
                 ),
               ),
-            ),
+          ),
+      ),
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MEMBER STATS CARD — Personal performance for non-owner roles
+  // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildMemberStatsCard(
+      BuildContext context, List<ReceiptModel> allReceipts, String myUid) {
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
+    final myReceipts = allReceipts
+        .where((r) => r.collectorId == myUid && r.paymentStatus != 'cancelled')
+        .toList();
+
+    double todayAmt = 0, monthAmt = 0, totalAmt = 0;
+    int pendingCount = 0;
+    for (final r in myReceipts) {
+      final d = DateTime.tryParse(r.createdAt);
+      if (d != null && d.isAfter(startOfToday)) todayAmt += r.amount;
+      if (d != null && d.isAfter(startOfMonth)) monthAmt += r.amount;
+      if (r.paymentStatus == 'paid') totalAmt += r.amount;
+      if (r.paymentStatus == 'pending') pendingCount++;
+    }
+
+    return Card(
+      color: Colors.white,
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.04),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.withOpacity(0.12), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.person_outline, color: Color(0xFF8B1E2D), size: 20),
+                SizedBox(width: 8),
+                Text(
+                  'My Performance',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFF2E1C0C),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: Colors.black12),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _memberStatChip('Today', '₹${todayAmt.toStringAsFixed(0)}',
+                    Icons.wb_sunny_outlined, Colors.orange),
+                const SizedBox(width: 10),
+                _memberStatChip('This Month',
+                    '₹${monthAmt.toStringAsFixed(0)}', Icons.calendar_month,
+                    Colors.blue),
+                const SizedBox(width: 10),
+                _memberStatChip(
+                    'Total', '₹${totalAmt.toStringAsFixed(0)}',
+                    Icons.account_balance_wallet_outlined,
+                    const Color(0xFF8B1E2D)),
+                const SizedBox(width: 10),
+                _memberStatChip('Pending', '$pendingCount',
+                    Icons.hourglass_empty, Colors.amber[700]!),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _memberStatChip(
+      String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(fontSize: 9, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TEAM PERFORMANCE CARD — Per-member breakdown for owners
+  // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildTeamPerformanceCard(
+      BuildContext context, List<ReceiptModel> allReceipts) {
+    if (allReceipts.isEmpty) return const SizedBox.shrink();
+
+    final now = DateTime.now();
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    final startOfMonth = DateTime(now.year, now.month, 1);
+
+    // Group by collectorId
+    final Map<String, Map<String, dynamic>> byMember = {};
+    for (final r in allReceipts) {
+      if (r.paymentStatus == 'cancelled') continue;
+      final cid = r.collectorId ?? 'unknown';
+      byMember.putIfAbsent(cid, () => {
+            'name': r.collectorName ?? r.createdByName ?? 'Unknown',
+            'role': r.collectorRole ?? r.createdByRole ?? '',
+            'total': 0.0,
+            'todayAmt': 0.0,
+            'monthAmt': 0.0,
+            'count': 0,
+            'pendingCount': 0,
+            'lastReceipt': null,
+          });
+
+      final d = DateTime.tryParse(r.createdAt);
+      byMember[cid]!['count'] = (byMember[cid]!['count'] as int) + 1;
+
+      if (r.paymentStatus == 'paid') {
+        byMember[cid]!['total'] =
+            (byMember[cid]!['total'] as double) + r.amount;
+        if (d != null && d.isAfter(startOfToday)) {
+          byMember[cid]!['todayAmt'] =
+              (byMember[cid]!['todayAmt'] as double) + r.amount;
+        }
+        if (d != null && d.isAfter(startOfMonth)) {
+          byMember[cid]!['monthAmt'] =
+              (byMember[cid]!['monthAmt'] as double) + r.amount;
+        }
+      } else if (r.paymentStatus == 'pending') {
+        byMember[cid]!['pendingCount'] =
+            (byMember[cid]!['pendingCount'] as int) + 1;
+      }
+
+      // Track latest receipt time
+      if (d != null) {
+        final prev = byMember[cid]!['lastReceipt'] as DateTime?;
+        if (prev == null || d.isAfter(prev)) {
+          byMember[cid]!['lastReceipt'] = d;
+        }
+      }
+    }
+
+    if (byMember.isEmpty) return const SizedBox.shrink();
+
+    // Sort by total amount descending
+    final sorted = byMember.entries.toList()
+      ..sort((a, b) =>
+          (b.value['total'] as double).compareTo(a.value['total'] as double));
+
+    return Card(
+      color: Colors.white,
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.04),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: Colors.grey.withOpacity(0.12), width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.leaderboard_outlined,
+                    color: Color(0xFF8B1E2D), size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Team Performance',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: Color(0xFF2E1C0C),
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () =>
+                      Navigator.pushNamed(context, '/settings/team'),
+                  child: const Text(
+                    'Manage',
+                    style: TextStyle(
+                        color: Color(0xFF8B1E2D),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            const Divider(height: 1, color: Colors.black12),
+            const SizedBox(height: 4),
+
+            // Header row
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  Expanded(flex: 3, child: Text('Member', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54))),
+                  Expanded(flex: 2, child: Text('Today', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54), textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: Text('Month', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54), textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: Text('Total', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54), textAlign: TextAlign.right)),
+                  Expanded(flex: 2, child: Text('Avg', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54), textAlign: TextAlign.right)),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: Colors.black12),
+
+            // Member rows
+            ...sorted.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final e = entry.value;
+              final data = e.value;
+              final name = (data['name'] as String).trim().split(' ').first;
+              final total = data['total'] as double;
+              final today = data['todayAmt'] as double;
+              final month = data['monthAmt'] as double;
+              final count = data['count'] as int;
+              final avg = count > 0 ? total / count : 0.0;
+              final lastDt = data['lastReceipt'] as DateTime?;
+              final isTop = idx == 0 && total > 0;
+
+              return Container(
+                decoration: BoxDecoration(
+                  color: isTop
+                      ? const Color(0xFFFFF6E8)
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Row(
+                          children: [
+                            if (isTop)
+                              const Text('🏆 ',
+                                  style: TextStyle(fontSize: 11)),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    name,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: isTop
+                                          ? FontWeight.bold
+                                          : FontWeight.w500,
+                                      color: const Color(0xFF2E1C0C),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  if (lastDt != null)
+                                    Text(
+                                      _formatDate(lastDt),
+                                      style: TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.grey[400]),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          '₹${today.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: today > 0
+                                ? Colors.green[700]
+                                : Colors.grey[400],
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          '₹${month.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2E1C0C),
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          '₹${total.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF8B1E2D),
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      Expanded(
+                        flex: 2,
+                        child: Text(
+                          '₹${avg.toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // RECENT ACTIVITY LOG — Real-time stream from activity_logs
+  // ─────────────────────────────────────────────────────────────────────────
+  Widget _buildRecentActivitySection(BuildContext context, String orgId) {
+    if (orgId.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Recent Activity',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2E1C0C)),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pushNamed(context, '/settings/activity-log'),
+              child: const Text(
+                'View All',
+                style: TextStyle(
+                    color: Color(0xFF8B1E2D),
+                    fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('activity_logs')
+              .where('organizationId', isEqualTo: orgId)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const ShimmerSkeleton(
+                width: double.infinity,
+                height: 120,
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              );
+            }
+            if (snapshot.hasError) {
+              debugPrint('[FIRESTORE_ACTIVITY_LOG_ERROR] OrganizationId: $orgId | Exception: ${snapshot.error}');
+            }
+
+            final rawDocs = snapshot.data?.docs ?? [];
+            if (rawDocs.isEmpty) {
+              return Card(
+                elevation: 0,
+                color: Colors.white.withOpacity(0.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: Colors.grey.withOpacity(0.2)),
+                ),
+                child: const EmptyStateWidget(
+                  title: 'No recent activity.',
+                  description: 'Activity such as receipts created, payments confirmed, and member changes will appear here.',
+                  icon: Icons.history,
+                ),
+              );
+            }
+
+            // Sort docs in memory by timestamp descending to support all query/index configurations
+            final docs = List<QueryDocumentSnapshot>.from(rawDocs);
+            docs.sort((a, b) {
+              final aData = a.data() as Map<String, dynamic>?;
+              final bData = b.data() as Map<String, dynamic>?;
+              final aTs = aData?['timestamp'];
+              final bTs = bData?['timestamp'];
+              DateTime? aTime;
+              DateTime? bTime;
+              if (aTs is Timestamp) aTime = aTs.toDate();
+              else if (aTs is String) aTime = DateTime.tryParse(aTs);
+
+              if (bTs is Timestamp) bTime = bTs.toDate();
+              else if (bTs is String) bTime = DateTime.tryParse(bTs);
+
+              if (aTime == null && bTime == null) return 0;
+              if (aTime == null) return 1;
+              if (bTime == null) return -1;
+              return bTime.compareTo(aTime);
+            });
+
+            final displayDocs = docs.take(8).toList();
+
+            return Card(
+              elevation: 2,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 8.0),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: displayDocs.length,
+                  separatorBuilder: (_, __) =>
+                      const Divider(height: 1, color: Colors.black12),
+                  itemBuilder: (context, i) {
+                    final data =
+                        displayDocs[i].data() as Map<String, dynamic>;
+                    final action = data['action'] as String? ?? '';
+                    final details = data['details'] as String? ?? '';
+                    final userName = data['userName'] as String? ?? '';
+                    final ts = data['timestamp'];
+                    DateTime? time;
+                    if (ts is Timestamp) {
+                      time = ts.toDate();
+                    } else if (ts is String) {
+                      time = DateTime.tryParse(ts);
+                    }
+
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor:
+                            _activityColor(action).withOpacity(0.12),
+                        child: Icon(
+                          _activityIcon(action),
+                          size: 16,
+                          color: _activityColor(action),
+                        ),
+                      ),
+                      title: Text(
+                        details.isNotEmpty ? details : action,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF2E1C0C),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        time != null
+                            ? '$userName · ${_timeAgo(time)}'
+                            : userName,
+                        style: TextStyle(
+                            fontSize: 10, color: Colors.grey[500]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  IconData _activityIcon(String action) {
+    switch (action) {
+      case 'Receipt Created':
+        return Icons.receipt_long;
+      case 'Payment Confirmed':
+        return Icons.check_circle_outline;
+      case 'Receipt Edited':
+        return Icons.edit_outlined;
+      case 'Organization Switched':
+        return Icons.swap_horiz;
+      case 'Member Invited':
+        return Icons.person_add_outlined;
+      case 'Member Removed':
+        return Icons.person_remove_outlined;
+      case 'Role Changed':
+        return Icons.manage_accounts_outlined;
+      case 'Subscription Upgraded':
+        return Icons.star_outline;
+      default:
+        return Icons.info_outline;
+    }
+  }
+
+  Color _activityColor(String action) {
+    switch (action) {
+      case 'Receipt Created':
+        return const Color(0xFF8B1E2D);
+      case 'Payment Confirmed':
+        return Colors.green;
+      case 'Receipt Edited':
+        return Colors.orange;
+      case 'Member Invited':
+      case 'Member Removed':
+      case 'Role Changed':
+        return Colors.blue;
+      case 'Subscription Upgraded':
+        return Colors.amber;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return _formatDate(dt);
   }
 
   String _formatDate(DateTime date) {
@@ -1749,9 +2390,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       SubscriptionModel sub, Map<String, dynamic> config) {
     int remainingDays = 0;
     bool isExpired = false;
-    if (sub.renewalDate.isNotEmpty) {
+    if (sub.renewalDate != null && sub.renewalDate!.isNotEmpty) {
       try {
-        final renewal = DateTime.parse(sub.renewalDate);
+        final renewal = DateTime.parse(sub.renewalDate!);
         remainingDays = renewal.difference(DateTime.now()).inDays;
         if (remainingDays < 0) {
           remainingDays = 0;
@@ -1917,22 +2558,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildSubscriptionChip(
       BuildContext context, SubscriptionModel sub) {
     final used = sub.receiptsUsed;
-    final limit = sub.receiptLimit;
-    final ratio = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
-    
-    final isTrial = sub.plan == 'free_trial';
-    final isPremium = sub.plan == 'premium_monthly' || sub.plan == 'premium_yearly';
-    final isProfessional = !isTrial && !isPremium;
+    final isUnlimited = sub.isUnlimitedReceipts;
+    final limit = sub.receiptLimit ?? 10;
+    final ratio = isUnlimited ? 0.0 : (used / limit).clamp(0.0, 1.0);
+
+    final isFree = sub.plan == 'free' || sub.plan == 'free_trial';
+    final isPremium = sub.plan.contains('premium');
+    final isProfessional = !isFree && !isPremium;
 
     final teamUsed = sub.usersUsed;
-    final teamLimit = isTrial ? 1 : (isProfessional ? 3 : 10);
+    final teamLimit = sub.usersLimit;
     final teamRatio = teamLimit > 0 ? (teamUsed / teamLimit).clamp(0.0, 1.0) : 0.0;
 
     int remainingDays = 0;
-    String renewalFormatted = '—';
-    if (sub.renewalDate.isNotEmpty) {
+    String renewalFormatted = 'Lifetime';
+    if (sub.renewalDate != null && sub.renewalDate!.isNotEmpty) {
       try {
-        final renewal = DateTime.parse(sub.renewalDate);
+        final renewal = DateTime.parse(sub.renewalDate!);
         remainingDays = renewal.difference(DateTime.now()).inDays;
         if (remainingDays < 0) remainingDays = 0;
         renewalFormatted =
@@ -1949,17 +2591,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final rcColor = progressColor(ratio);
     final usColor = progressColor(teamRatio);
 
-    final planLabel = sub.plan == 'free_trial'
-        ? 'Free Trial'
-        : (sub.plan == 'monthly' || sub.plan == 'professional_monthly')
-            ? 'Professional Monthly'
-            : (sub.plan == 'yearly' || sub.plan == 'professional_yearly')
-                ? 'Professional Yearly'
-                : sub.plan == 'premium_monthly'
-                    ? 'Premium Monthly'
-                    : sub.plan == 'premium_yearly'
-                        ? 'Premium Yearly'
-                        : sub.plan.toUpperCase();
+    final planLabel = sub.planDetails.displayName;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 280),
@@ -2041,8 +2673,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             // Receipts chip
                             _subChipItem(
                               icon: Icons.receipt_outlined,
-                              value: isTrial ? '$used/10' : '$used',
-                              label: isTrial ? 'Receipts' : 'Generated',
+                              value: isUnlimited ? 'Unlimited' : '$used/$limit',
+                              label: 'Receipts',
                               color: rcColor,
                             ),
                             const SizedBox(width: 8),
@@ -2054,12 +2686,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               color: usColor,
                             ),
                             const SizedBox(width: 8),
+                            if (isPremium) ...[
+                              _subChipItem(
+                                icon: Icons.chat_outlined,
+                                value: '0/1000',
+                                label: 'Auto WA',
+                                color: const Color(0xFF2E1C0C),
+                              ),
+                              const SizedBox(width: 8),
+                            ],
                             // Days chip
                             _subChipItem(
                               icon: Icons.schedule_outlined,
-                              value: '$remainingDays',
-                              label: 'Days',
-                              color: remainingDays <= 7
+                              value: sub.renewalDate == null
+                                  ? 'Lifetime'
+                                  : '$remainingDays Days Left',
+                              label: sub.renewalDate == null ? 'Free' : 'Remaining',
+                              color: (sub.renewalDate != null && remainingDays <= 7)
                                   ? Colors.red
                                   : const Color(0xFF2E1C0C),
                             ),
@@ -2121,12 +2764,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            isTrial ? 'Receipts Used' : 'Receipts Generated',
+                            'Receipts',
                             style: TextStyle(
                                 fontSize: 12, color: Colors.grey[700]),
                           ),
                           Text(
-                            isTrial ? '$used / 10' : '$used',
+                            isUnlimited ? 'Unlimited' : '$used / $limit',
                             style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
@@ -2134,7 +2777,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ],
                       ),
-                      if (isTrial) ...[
+                      if (!isUnlimited) ...[
                         const SizedBox(height: 5),
                         TweenAnimationBuilder<double>(
                           tween: Tween<double>(begin: 0.0, end: ratio),
@@ -2193,19 +2836,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               size: 14, color: Colors.grey[500]),
                           const SizedBox(width: 5),
                           Text(
-                            'Renewal: $renewalFormatted',
+                            sub.renewalDate == null
+                                ? 'Plan: Lifetime Free'
+                                : 'Renewal: $renewalFormatted',
                             style: TextStyle(
                                 fontSize: 12, color: Colors.grey[600]),
                           ),
                           const Spacer(),
                           Text(
-                            '$remainingDays days left',
+                            sub.renewalDate == null
+                                ? 'Lifetime Free'
+                                : 'Expires in $remainingDays Days',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: remainingDays <= 7
-                                  ? Colors.red[700]
-                                  : Colors.green[700],
+                              color: sub.renewalDate == null
+                                  ? Colors.green[700]
+                                  : remainingDays <= 7
+                                      ? Colors.red[700]
+                                      : Colors.green[700],
                             ),
                           ),
                         ],
@@ -2222,18 +2871,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 context, '/settings/subscription-usage');
                           },
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                                color: Color(0xFF8B1E2D), width: 1.2),
-                            foregroundColor: const Color(0xFF8B1E2D),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            side: const BorderSide(color: Color(0xFF2E1C0C)),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
                           ),
                           child: const Text(
                             'Manage Subscription',
                             style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold),
+                              color: Color(0xFF2E1C0C),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),

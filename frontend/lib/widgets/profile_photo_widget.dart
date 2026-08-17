@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/image_processing_service.dart';
 
@@ -81,10 +82,19 @@ class _ProfilePhotoWidgetState extends State<ProfilePhotoWidget> {
   @override
   Widget build(BuildContext context) {
     ImageProvider? bgImage;
-    if (_cachedFile != null) {
+    if (_cachedFile != null && _cachedFile!.existsSync()) {
       bgImage = FileImage(_cachedFile!);
     } else if (widget.url != null && widget.url!.isNotEmpty) {
-      bgImage = NetworkImage(widget.url!);
+      if (widget.url!.startsWith('data:image')) {
+        try {
+          final base64Str = widget.url!.split(',').last;
+          bgImage = MemoryImage(base64Decode(base64Str));
+        } catch (_) {}
+      } else {
+        final version = widget.version ?? 0;
+        final separator = widget.url!.contains('?') ? '&' : '?';
+        bgImage = NetworkImage('${widget.url}${separator}v=$version');
+      }
     }
 
     final bool hasBorder = (bgImage == null && widget.radius <= 20);

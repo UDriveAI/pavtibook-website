@@ -1,9 +1,12 @@
 // Model classes for PavtiBook App
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../config/subscription_config.dart';
+export 'default_pavtibook_geometry.dart';
 
 class UserModel {
   final String id;
   final String? organizationId;
+  final String? lastSelectedOrgId;
   final String name;
   final String email;
   final String mobile;
@@ -18,6 +21,7 @@ class UserModel {
   UserModel({
     required this.id,
     this.organizationId,
+    this.lastSelectedOrgId,
     required this.name,
     required this.email,
     required this.mobile,
@@ -35,6 +39,7 @@ class UserModel {
       id: json['id'] ?? '',
       organizationId:
           json['organization_id'] ?? json['organizationId'] ?? json['org_id'],
+      lastSelectedOrgId: json['lastSelectedOrgId'] ?? json['organizationId'] ?? json['organization_id'],
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       mobile: json['mobile'] ?? '',
@@ -89,17 +94,23 @@ class OrganizationModel {
   final String? customStampUrl;
   final String? footerText;
 
-  // Signatures fields
+  // Signatures fields & scales
   final String? presidentSignatureUrl;
   final String? treasurerSignatureUrl;
+  final String? secretarySignatureUrl;
   final String? agentSignatureUrl;
+  final double presidentSignatureScale;
+  final double treasurerSignatureScale;
+  final double secretarySignatureScale;
 
   // Office bearer names & designations
   final String? presidentName;
   final String? treasurerName;
+  final String? secretaryName;
   final String? memberName;
   final String? presidentDesignation;
   final String? treasurerDesignation;
+  final String? secretaryDesignation;
   final String? memberDesignation;
 
   // Payment configuration fields
@@ -146,12 +157,18 @@ class OrganizationModel {
     this.footerText,
     this.presidentSignatureUrl,
     this.treasurerSignatureUrl,
+    this.secretarySignatureUrl,
     this.agentSignatureUrl,
+    this.presidentSignatureScale = 1.0,
+    this.treasurerSignatureScale = 1.0,
+    this.secretarySignatureScale = 1.0,
     this.presidentName,
     this.treasurerName,
+    this.secretaryName,
     this.memberName,
     this.presidentDesignation,
     this.treasurerDesignation,
+    this.secretaryDesignation,
     this.memberDesignation,
     this.upiQrImageUrl,
     this.upiMerchantName,
@@ -199,10 +216,28 @@ class OrganizationModel {
           json['president_signature_url'] ?? json['presidentSignatureUrl'],
       treasurerSignatureUrl:
           json['treasurer_signature_url'] ?? json['treasurerSignatureUrl'],
+      secretarySignatureUrl:
+          json['secretary_signature_url'] ?? json['secretarySignatureUrl'],
       agentSignatureUrl:
           json['agent_signature_url'] ?? json['agentSignatureUrl'],
+      presidentSignatureScale: (json['president_signature_scale'] is num)
+          ? (json['president_signature_scale'] as num).toDouble()
+          : (json['presidentSignatureScale'] is num)
+              ? (json['presidentSignatureScale'] as num).toDouble()
+              : 1.0,
+      treasurerSignatureScale: (json['treasurer_signature_scale'] is num)
+          ? (json['treasurer_signature_scale'] as num).toDouble()
+          : (json['treasurerSignatureScale'] is num)
+              ? (json['treasurerSignatureScale'] as num).toDouble()
+              : 1.0,
+      secretarySignatureScale: (json['secretary_signature_scale'] is num)
+          ? (json['secretary_signature_scale'] as num).toDouble()
+          : (json['secretarySignatureScale'] is num)
+              ? (json['secretarySignatureScale'] as num).toDouble()
+              : 1.0,
       presidentName: json['president_name'] ?? json['presidentName'],
       treasurerName: json['treasurer_name'] ?? json['treasurerName'],
+      secretaryName: json['secretary_name'] ?? json['secretaryName'],
       memberName: json['member_name'] ??
           json['memberName'] ??
           json['agent_name'] ??
@@ -211,6 +246,8 @@ class OrganizationModel {
           json['president_designation'] ?? json['presidentDesignation'],
       treasurerDesignation:
           json['treasurer_designation'] ?? json['treasurerDesignation'],
+      secretaryDesignation:
+          json['secretary_designation'] ?? json['secretaryDesignation'],
       memberDesignation: json['member_designation'] ??
           json['memberDesignation'] ??
           json['agent_designation'] ??
@@ -258,7 +295,56 @@ class TemplateModel {
   final String? footerTextLocal;
   final String signatureLabel;
   final String? signatureUrl;
+  final String? stampUrl;
   final bool isDefault;
+
+  // Complete Color Override Fields
+  final String? primaryColor;
+  final String? secondaryColor;
+  final String? accentColor;
+
+  // Complete Typography Parameters
+  final double headingSize;
+  final double bodySize;
+  final double amountSize;
+  final String fontWeight;
+
+  // Additional Subtitle & Note Text
+  final String? customSubtitleEn;
+  final String? customSubtitleLocal;
+  final String? customNote;
+
+  // Complete 16 Field Visibility Toggles
+  final bool showDonorName;
+  final bool showDonorAddress;
+  final bool showDonorMobile;
+  final bool showDonorEmail;
+  final bool showPurpose;
+  final bool showPaymentMode;
+  final bool showAmount;
+  final bool showAmountInWords;
+  final bool showReceiptNumber;
+  final bool showDate;
+  final bool showTime;
+  final bool showQrCode;
+  final bool showSignature;
+  final bool showStamp;
+  final bool showNotes;
+  final bool showFooter;
+
+  // Custom Translations Map for section labels
+  final Map<String, String>? customTranslations;
+
+  // Controlled Branding & Typography Sizing
+  final double logoScale;
+  final double stampScale;
+  final String? presidentSignatureUrl;
+  final String? treasurerSignatureUrl;
+  final String? secretarySignatureUrl;
+  final double presidentSignatureScale;
+  final double treasurerSignatureScale;
+  final double secretarySignatureScale;
+  final Map<String, double>? customTextSizes;
 
   TemplateModel({
     required this.id,
@@ -271,6 +357,16 @@ class TemplateModel {
     required this.fontFamily,
     required this.fontColor,
     required this.logoVisible,
+    this.primaryColor,
+    this.secondaryColor,
+    this.accentColor,
+    this.headingSize = 16.0,
+    this.bodySize = 9.5,
+    this.amountSize = 18.0,
+    this.fontWeight = 'bold',
+    this.customSubtitleEn,
+    this.customSubtitleLocal,
+    this.customNote,
     this.godImageUrl,
     required this.godImagePosition,
     this.watermarkUrl,
@@ -281,10 +377,57 @@ class TemplateModel {
     this.footerTextLocal,
     required this.signatureLabel,
     this.signatureUrl,
+    this.presidentSignatureUrl,
+    this.treasurerSignatureUrl,
+    this.secretarySignatureUrl,
+    this.presidentSignatureScale = 1.0,
+    this.treasurerSignatureScale = 1.0,
+    this.secretarySignatureScale = 1.0,
+    this.stampUrl,
     required this.isDefault,
+    this.customTranslations,
+    this.showDonorName = true,
+    this.showDonorAddress = true,
+    this.showDonorMobile = true,
+    this.showDonorEmail = true,
+    this.showPurpose = true,
+    this.showPaymentMode = true,
+    this.showAmount = true,
+    this.showAmountInWords = true,
+    this.showReceiptNumber = true,
+    this.showDate = true,
+    this.showTime = true,
+    this.showQrCode = true,
+    this.showSignature = true,
+    this.showStamp = true,
+    this.showNotes = true,
+    this.showFooter = true,
+    this.logoScale = 1.0,
+    this.stampScale = 1.0,
+    this.customTextSizes,
   });
 
   factory TemplateModel.fromJson(Map<String, dynamic> json) {
+    Map<String, String>? parsedTranslations;
+    if (json['custom_translations'] is Map) {
+      parsedTranslations = Map<String, String>.from(
+          (json['custom_translations'] as Map).map((k, v) => MapEntry(k.toString(), v.toString())));
+    } else if (json['customTranslations'] is Map) {
+      parsedTranslations = Map<String, String>.from(
+          (json['customTranslations'] as Map).map((k, v) => MapEntry(k.toString(), v.toString())));
+    }
+
+    Map<String, double>? parsedTextSizes;
+    if (json['custom_text_sizes'] is Map) {
+      parsedTextSizes = (json['custom_text_sizes'] as Map).map(
+        (k, v) => MapEntry(k.toString(), (v is num) ? v.toDouble() : 0.0),
+      );
+    } else if (json['customTextSizes'] is Map) {
+      parsedTextSizes = (json['customTextSizes'] as Map).map(
+        (k, v) => MapEntry(k.toString(), (v is num) ? v.toDouble() : 0.0),
+      );
+    }
+
     return TemplateModel(
       id: json['id'] ?? '',
       organizationId: json['organization_id'] ?? json['organizationId'] ?? '',
@@ -296,6 +439,16 @@ class TemplateModel {
       fontFamily: json['font_family'] ?? json['fontFamily'] ?? 'Poppins',
       fontColor: json['font_color'] ?? json['fontColor'] ?? '#3E2723',
       logoVisible: json['logo_visible'] ?? json['logoVisible'] ?? true,
+      primaryColor: json['primary_color'] ?? json['primaryColor'],
+      secondaryColor: json['secondary_color'] ?? json['secondaryColor'],
+      accentColor: json['accent_color'] ?? json['accentColor'],
+      headingSize: (json['heading_size'] is num) ? (json['heading_size'] as num).toDouble() : 16.0,
+      bodySize: (json['body_size'] is num) ? (json['body_size'] as num).toDouble() : 9.5,
+      amountSize: (json['amount_size'] is num) ? (json['amount_size'] as num).toDouble() : 18.0,
+      fontWeight: json['font_weight'] ?? json['fontWeight'] ?? 'bold',
+      customSubtitleEn: json['custom_subtitle_en'] ?? json['customSubtitleEn'],
+      customSubtitleLocal: json['custom_subtitle_local'] ?? json['customSubtitleLocal'],
+      customNote: json['custom_note'] ?? json['customNote'],
       godImageUrl: json['god_image_url'] ?? json['godImageUrl'],
       godImagePosition:
           json['god_image_position'] ?? json['godImagePosition'] ?? 'left',
@@ -311,10 +464,114 @@ class TemplateModel {
       footerTextLocal: json['footer_text_local'] ?? json['footerTextLocal'],
       signatureLabel: json['signature_label'] ??
           json['signatureLabel'] ??
-          'Authorized Signatory',
+          'President / अध्यक्ष',
       signatureUrl: json['signature_url'] ?? json['signatureUrl'],
+      presidentSignatureUrl: json['president_signature_url'] ?? json['presidentSignatureUrl'],
+      treasurerSignatureUrl: json['treasurer_signature_url'] ?? json['treasurerSignatureUrl'],
+      secretarySignatureUrl: json['secretary_signature_url'] ?? json['secretarySignatureUrl'],
+      presidentSignatureScale: (json['president_signature_scale'] is num)
+          ? (json['president_signature_scale'] as num).toDouble()
+          : (json['presidentSignatureScale'] is num)
+              ? (json['presidentSignatureScale'] as num).toDouble()
+              : 1.0,
+      treasurerSignatureScale: (json['treasurer_signature_scale'] is num)
+          ? (json['treasurer_signature_scale'] as num).toDouble()
+          : (json['treasurerSignatureScale'] is num)
+              ? (json['treasurerSignatureScale'] as num).toDouble()
+              : 1.0,
+      secretarySignatureScale: (json['secretary_signature_scale'] is num)
+          ? (json['secretary_signature_scale'] as num).toDouble()
+          : (json['secretarySignatureScale'] is num)
+              ? (json['secretarySignatureScale'] as num).toDouble()
+              : 1.0,
+      stampUrl: json['stamp_url'] ?? json['stampUrl'],
       isDefault: json['is_default'] ?? json['isDefault'] ?? false,
+      customTranslations: parsedTranslations,
+      logoScale: (json['logo_scale'] is num)
+          ? (json['logo_scale'] as num).toDouble()
+          : (json['logoScale'] is num)
+              ? (json['logoScale'] as num).toDouble()
+              : 1.0,
+      stampScale: (json['stamp_scale'] is num)
+          ? (json['stamp_scale'] as num).toDouble()
+          : (json['stampScale'] is num)
+              ? (json['stampScale'] as num).toDouble()
+              : 1.0,
+      customTextSizes: parsedTextSizes,
+      showDonorName: json['show_donor_name'] ?? json['showDonorName'] ?? true,
+      showDonorAddress: json['show_donor_address'] ?? json['showDonorAddress'] ?? true,
+      showDonorMobile: json['show_donor_mobile'] ?? json['showDonorMobile'] ?? true,
+      showDonorEmail: json['show_donor_email'] ?? json['showDonorEmail'] ?? true,
+      showPurpose: json['show_purpose'] ?? json['showPurpose'] ?? true,
+      showPaymentMode: json['show_payment_mode'] ?? json['showPaymentMode'] ?? true,
+      showAmount: json['show_amount'] ?? json['showAmount'] ?? true,
+      showAmountInWords: json['show_amount_in_words'] ?? json['showAmountInWords'] ?? true,
+      showReceiptNumber: json['show_receipt_number'] ?? json['showReceiptNumber'] ?? true,
+      showDate: json['show_date'] ?? json['showDate'] ?? true,
+      showTime: json['show_time'] ?? json['showTime'] ?? true,
+      showQrCode: json['show_qr_code'] ?? json['showQrCode'] ?? true,
+      showSignature: json['show_signature'] ?? json['showSignature'] ?? true,
+      showStamp: json['show_stamp'] ?? json['showStamp'] ?? true,
+      showNotes: json['show_notes'] ?? json['showNotes'] ?? true,
+      showFooter: json['show_footer'] ?? json['showFooter'] ?? true,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'organization_id': organizationId,
+      'name': name,
+      'type': type,
+      'bg_color': bgColor,
+      'border_style': borderStyle,
+      'border_color': borderColor,
+      'font_family': fontFamily,
+      'font_color': fontColor,
+      'logo_visible': logoVisible,
+      'primary_color': primaryColor,
+      'secondary_color': secondaryColor,
+      'accent_color': accentColor,
+      'heading_size': headingSize,
+      'body_size': bodySize,
+      'amount_size': amountSize,
+      'font_weight': fontWeight,
+      'custom_subtitle_en': customSubtitleEn,
+      'custom_subtitle_local': customSubtitleLocal,
+      'custom_note': customNote,
+      'god_image_url': godImageUrl,
+      'god_image_position': godImagePosition,
+      'watermark_url': watermarkUrl,
+      'watermark_opacity': watermarkOpacity,
+      'header_text_en': headerTextEn,
+      'header_text_local': headerTextLocal,
+      'footer_text_en': footerTextEn,
+      'footer_text_local': footerTextLocal,
+      'signature_label': signatureLabel,
+      'signature_url': signatureUrl,
+      'stamp_url': stampUrl,
+      'is_default': isDefault,
+      'custom_translations': customTranslations,
+      'logo_scale': logoScale,
+      'stamp_scale': stampScale,
+      'custom_text_sizes': customTextSizes,
+      'show_donor_name': showDonorName,
+      'show_donor_address': showDonorAddress,
+      'show_donor_mobile': showDonorMobile,
+      'show_donor_email': showDonorEmail,
+      'show_purpose': showPurpose,
+      'show_payment_mode': showPaymentMode,
+      'show_amount': showAmount,
+      'show_amount_in_words': showAmountInWords,
+      'show_receipt_number': showReceiptNumber,
+      'show_date': showDate,
+      'show_time': showTime,
+      'show_qr_code': showQrCode,
+      'show_signature': showSignature,
+      'show_stamp': showStamp,
+      'show_notes': showNotes,
+      'show_footer': showFooter,
+    };
   }
 }
 
@@ -410,6 +667,13 @@ class ReceiptModel {
   final String? receiptImageUrl;
   final int? receiptVersion;
 
+  // Immutable audit fields — written once at creation, never editable
+  final String? createdBy;       // UID of the user who created the receipt
+  final String? createdByName;   // Display name of creator at time of creation
+  final String? createdByRole;   // Role of creator at time of creation
+  final String? createdByMobile; // Mobile of creator at time of creation
+  final String? idempotencyKey;  // Client-generated key for deduplication
+
   ReceiptModel({
     required this.id,
     required this.organizationId,
@@ -453,6 +717,11 @@ class ReceiptModel {
     this.collectorSignatureSnapshot,
     this.receiptImageUrl,
     this.receiptVersion,
+    this.createdBy,
+    this.createdByName,
+    this.createdByRole,
+    this.createdByMobile,
+    this.idempotencyKey,
   });
 
   factory ReceiptModel.fromJson(Map<String, dynamic> json) {
@@ -536,6 +805,11 @@ class ReceiptModel {
       collectorSignatureSnapshot: json['collectorSignatureSnapshot'] ?? json['collector_signature_snapshot'],
       receiptImageUrl: json['receiptImageUrl'] ?? json['receipt_image_url'],
       receiptVersion: json['receiptVersion'] ?? json['receipt_version'],
+      createdBy: json['createdBy'] ?? json['created_by'],
+      createdByName: json['createdByName'] ?? json['created_by_name'],
+      createdByRole: json['createdByRole'] ?? json['created_by_role'],
+      createdByMobile: json['createdByMobile'] ?? json['created_by_mobile'] ?? '',
+      idempotencyKey: json['idempotencyKey'] ?? json['idempotency_key'],
     );
   }
 
@@ -583,6 +857,11 @@ class ReceiptModel {
       'collectorSignatureSnapshot': collectorSignatureSnapshot,
       'receiptImageUrl': receiptImageUrl,
       'receiptVersion': receiptVersion,
+      'createdBy': createdBy,
+      'createdByName': createdByName,
+      'createdByRole': createdByRole,
+      'createdByMobile': createdByMobile,
+      'idempotencyKey': idempotencyKey,
     };
   }
 }
@@ -691,10 +970,9 @@ class SubscriptionModel {
   final String organizationId;
   final String plan;
   final int receiptsUsed;
-  final int receiptLimit;
   final int usersUsed;
-  final int usersLimit;
-  final String renewalDate;
+  final String? renewalDate;
+  final String? status;
   final String createdAt;
   final String updatedAt;
 
@@ -703,24 +981,39 @@ class SubscriptionModel {
     required this.organizationId,
     required this.plan,
     required this.receiptsUsed,
-    required this.receiptLimit,
     required this.usersUsed,
-    required this.usersLimit,
-    required this.renewalDate,
+    this.renewalDate,
+    this.status,
     required this.createdAt,
     required this.updatedAt,
   });
+
+  PlanDetails get planDetails => SubscriptionPlanConfig.getPlan(plan);
+
+  bool get isUnlimitedReceipts => planDetails.isUnlimitedReceipts;
+
+  int? get receiptLimit => planDetails.receiptLimit;
+
+  int get usersLimit => planDetails.usersLimit;
+
+  int get autoWhatsAppLimit => planDetails.autoWhatsAppLimit;
+
+  bool get canShareNow => planDetails.canShareNow;
+
+  bool get isReceiptLimitReached =>
+      !isUnlimitedReceipts && receiptLimit != null && receiptsUsed >= receiptLimit!;
+
+  bool get isUserLimitReached => usersUsed >= usersLimit;
 
   factory SubscriptionModel.fromJson(Map<String, dynamic> json) {
     return SubscriptionModel(
       id: json['id'] ?? '',
       organizationId: json['organizationId'] ?? json['organization_id'] ?? '',
-      plan: json['plan'] ?? 'free_trial',
+      plan: json['plan'] ?? SubscriptionPlanConfig.planFree,
       receiptsUsed: json['receiptsUsed'] ?? json['receipts_used'] ?? 0,
-      receiptLimit: json['receiptLimit'] ?? json['receipt_limit'] ?? 10,
       usersUsed: json['usersUsed'] ?? json['users_used'] ?? 1,
-      usersLimit: json['usersLimit'] ?? json['users_limit'] ?? 1,
-      renewalDate: json['renewalDate'] ?? json['renewal_date'] ?? '',
+      renewalDate: _parseDateTimeString(json['renewalDate'] ?? json['renewal_date']),
+      status: json['status'] ?? json['subscriptionStatus'],
       createdAt:
           _parseDateTimeString(json['createdAt'] ?? json['created_at']) ?? '',
       updatedAt:
@@ -805,9 +1098,13 @@ class MemberModel {
 class InviteModel {
   final String id;
   final String organizationId;
+  final String organizationName;
   final String name;
   final String mobile;
+  final String email;
   final String role;
+  final String activationCode;
+  final String activationToken;
   final String otp;
   final String status;
   final String expiresAt;
@@ -817,24 +1114,33 @@ class InviteModel {
   InviteModel({
     required this.id,
     required this.organizationId,
+    this.organizationName = '',
     required this.name,
     required this.mobile,
+    this.email = '',
     required this.role,
-    required this.otp,
+    this.activationCode = '',
+    this.activationToken = '',
+    String? otp,
     required this.status,
     required this.expiresAt,
     required this.isOneTime,
     required this.used,
-  });
+  }) : otp = otp ?? activationCode;
 
   factory InviteModel.fromJson(Map<String, dynamic> json) {
+    final code = (json['activationCode'] ?? json['otp'] ?? json['activationToken'] ?? '').toString();
     return InviteModel(
       id: json['id'] ?? '',
       organizationId: json['organizationId'] ?? json['organization_id'] ?? '',
+      organizationName: json['organizationName'] ?? json['organization_name'] ?? '',
       name: json['name'] ?? '',
       mobile: json['mobile'] ?? '',
+      email: json['email'] ?? '',
       role: json['role'] ?? '',
-      otp: json['otp'] ?? '',
+      activationCode: code,
+      activationToken: json['activationToken'] ?? code,
+      otp: code,
       status: json['status'] ?? 'pending',
       expiresAt:
           _parseDateTimeString(json['expiresAt'] ?? json['expires_at']) ?? '',

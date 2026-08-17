@@ -7,6 +7,8 @@ import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/profile_photo_widget.dart';
+import '../services/sharing_service.dart';
+import '../main.dart';
 
 class TeamManagementScreen extends StatefulWidget {
   const TeamManagementScreen({super.key});
@@ -35,10 +37,23 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
 
   @override
   void dispose() {
+    scaffoldMessengerKey.currentState?.clearSnackBars();
     _searchController.dispose();
     _nameFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  String _generateActivationToken() {
+    final rand = Random.secure();
+    final bytes = List<int>.generate(32, (_) => rand.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  String _generateActivationCode() {
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    final rand = Random.secure();
+    return List.generate(6, (index) => chars[rand.nextInt(chars.length)]).join();
   }
 
   String _logAndFormatError({
@@ -203,17 +218,14 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
     }
   }
 
-  // Generate 4-digit OTP code
-  String _generateOtp() {
-    final rand = Random();
-    return (1000 + rand.nextInt(9000)).toString();
-  }
+
 
   // Modal invite dialog
   void _showInviteDialog({String? preselectedRole}) {
     final inviteFormKey = GlobalKey<FormState>();
     final inviteNameController = TextEditingController();
     final inviteMobileController = TextEditingController();
+    final inviteEmailController = TextEditingController();
     String inviteRole = preselectedRole ?? 'member';
 
     showDialog(
@@ -234,7 +246,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                       TextFormField(
                         controller: inviteNameController,
                         decoration: const InputDecoration(
-                          labelText: 'Full Name',
+                          labelText: 'Full Name *',
                           prefixIcon: Icon(Icons.person_outline),
                         ),
                         validator: (val) => val == null || val.trim().isEmpty
@@ -246,15 +258,36 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                         controller: inviteMobileController,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
-                          labelText: 'Mobile Number',
+                          labelText: 'Mobile Number *',
                           prefixIcon: Icon(Icons.phone_outlined),
                           hintText: '10 digit number',
                         ),
                         validator: (val) {
-                          if (val == null || val.trim().isEmpty)
+                          if (val == null || val.trim().isEmpty) {
                             return 'Enter mobile number';
-                          if (val.trim().length != 10)
+                          }
+                          if (val.trim().length != 10) {
                             return 'Enter valid 10-digit mobile';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: inviteEmailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email Address *',
+                          prefixIcon: Icon(Icons.email_outlined),
+                          hintText: 'member@example.com',
+                        ),
+                        validator: (val) {
+                          if (val == null || val.trim().isEmpty) {
+                            return 'Enter email address';
+                          }
+                          if (!val.contains('@')) {
+                            return 'Enter a valid email address';
+                          }
                           return null;
                         },
                       ),
@@ -262,7 +295,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                       DropdownButtonFormField<String>(
                         value: inviteRole,
                         decoration: const InputDecoration(
-                          labelText: 'Select Role',
+                          labelText: 'Select Role *',
                           prefixIcon: Icon(Icons.security),
                         ),
                         items: const [
@@ -295,7 +328,6 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                   onPressed: () async {
                     if (!inviteFormKey.currentState!.validate()) return;
 
-                    // Capture messenger before any await — safe across async gaps.
                     final messenger = ScaffoldMessenger.of(context);
                     final auth =
                         Provider.of<AuthProvider>(context, listen: false);
@@ -322,9 +354,8 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
 
                     // 2. Pending Invite Check
                     final now = DateTime.now();
-                    final expiryDays = config['invite_expiry_days'] ?? 7;
                     final expiresAt =
-                        now.add(Duration(days: expiryDays)).toIso8601String();
+                        now.add(const Duration(minutes: 10)).toIso8601String();
 
                     final activeInvites = _invites.where((doc) {
                       final expStr = doc.data()['expiresAt'] ?? '';
@@ -349,15 +380,17 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                       return;
                     }
 
-                    // 3. Duplicate mobile members check
+                    // 3. Duplicate mobile/email members check
                     final isMemberDup = _members.any((doc) =>
                         doc.data()['mobile'] ==
-                        inviteMobileController.text.trim());
+                            inviteMobileController.text.trim() ||
+                        doc.data()['email'] ==
+                            inviteEmailController.text.trim());
                     if (isMemberDup) {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text(
-                              'This mobile number is already a team member.'),
+                              'This member or email is already a team member.'),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -367,19 +400,22 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                     // 4. Duplicate mobile invites check
                     final isInviteDup = activeInvites.any((doc) =>
                         doc.data()['mobile'] ==
-                        inviteMobileController.text.trim());
+                            inviteMobileController.text.trim() ||
+                        doc.data()['email'] ==
+                            inviteEmailController.text.trim());
                     if (isInviteDup) {
                       messenger.showSnackBar(
                         const SnackBar(
                           content: Text(
-                              'An active invitation is already pending for this mobile number.'),
+                              'An active invitation is already pending for this member.'),
                           backgroundColor: Colors.red,
                         ),
                       );
                       return;
                     }
 
-                    final otp = _generateOtp();
+                    final activationCode = _generateActivationCode();
+                    final activationToken = _generateActivationToken();
 
                     try {
                       final inviteRef = FirebaseFirestore.instance
@@ -388,15 +424,18 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                       await inviteRef.set({
                         'id': inviteRef.id,
                         'organizationId': orgId,
+                        'organizationName': auth.organization?.name ?? 'PavtiBook',
                         'name': inviteNameController.text.trim(),
                         'mobile': inviteMobileController.text.trim(),
+                        'email': inviteEmailController.text.trim(),
                         'role': inviteRole,
-                        'otp': otp,
+                        'activationCode': activationCode,
+                        'activationToken': activationToken,
+                        'otp': activationCode,
                         'status': 'pending',
                         'expiresAt': expiresAt,
-                        'isOneTime': true,
-                        'used': false,
                         'createdAt': FieldValue.serverTimestamp(),
+                        'createdBy': auth.user?.id ?? '',
                       });
 
                       // Log activity
@@ -407,27 +446,42 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                         'userId': auth.user?.id ?? '',
                         'userName': auth.user?.name ?? 'Owner',
                         'userRole': auth.user?.role ?? 'owner',
-                        'action': 'Invite Sent',
+                        'action': 'Invite Created',
                         'details':
-                            'Invited ${inviteNameController.text.trim()} as ${inviteRole.toUpperCase()}',
+                            'Invited ${inviteNameController.text.trim()} (${inviteEmailController.text.trim()}) as ${inviteRole.toUpperCase()}',
                         'timestamp': DateTime.now().toIso8601String(),
                       });
 
                       Navigator.pop(ctx);
                       await _loadTeamData();
 
-                      // messenger is pre-captured — safe to use after awaits.
+                      // Automatically share the invite details containing app download link and code
+                      final inviteMobile = inviteMobileController.text.trim();
+                      final inviteName = inviteNameController.text.trim();
+                      final orgName = auth.organization?.name ?? 'PavtiBook';
+                      try {
+                        await SharingService.sendInviteDetails(
+                          mobile: inviteMobile,
+                          inviteCode: activationCode,
+                          activationToken: activationToken,
+                          orgName: orgName,
+                          role: inviteRole.toUpperCase(),
+                        );
+                      } catch (e) {
+                        debugPrint('Failed to auto-share invite: $e');
+                      }
+
                       messenger.showSnackBar(
                         SnackBar(
                           content: Text(
-                              'Invitation Sent Successfully. OTP code: $otp'),
+                              'Invitation Sent Successfully for $inviteName. Code: $activationCode'),
                           backgroundColor: Colors.green,
-                          duration: const Duration(seconds: 8),
+                          duration: const Duration(seconds: 4),
                           action: SnackBarAction(
-                            label: 'COPY OTP',
+                            label: 'COPY CODE',
                             textColor: Colors.white,
                             onPressed: () {
-                              Clipboard.setData(ClipboardData(text: otp));
+                              Clipboard.setData(ClipboardData(text: activationCode));
                             },
                           ),
                         ),
@@ -466,18 +520,16 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
     final orgId = auth.organization?.id;
     if (orgId == null) return;
 
-    final config = auth.subConfig;
-    final expiryDays = config['invite_expiry_days'] ?? 7;
     final expiresAt =
-        DateTime.now().add(Duration(days: expiryDays)).toIso8601String();
-    final otp = _generateOtp();
+        DateTime.now().add(const Duration(minutes: 10)).toIso8601String();
+    final newActivationCode = _generateActivationCode();
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Resend Invitation'),
         content: Text(
-            'Are you sure you want to refresh the invitation for $name and generate a new OTP?'),
+            'Are you sure you want to refresh the invitation for $name and generate a new Activation Code?'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -499,7 +551,8 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
           .collection('organization_invites')
           .doc(inviteId)
           .update({
-        'otp': otp,
+        'activationCode': newActivationCode,
+        'otp': newActivationCode,
         'expiresAt': expiresAt,
         'status': 'pending',
         'used': false,
@@ -522,14 +575,14 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Invitation refreshed! New OTP is $otp.'),
+            content: Text('Invitation refreshed! New Activation Code is $newActivationCode.'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 8),
+            duration: const Duration(seconds: 4),
             action: SnackBarAction(
-              label: 'COPY OTP',
+              label: 'COPY CODE',
               textColor: Colors.white,
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: otp));
+                Clipboard.setData(ClipboardData(text: newActivationCode));
               },
             ),
           ),
@@ -1117,17 +1170,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
     final pendingCount = _invites.length;
     final availableSeats = usersLimit - usersUsed;
 
-    final planDisplayName = sub?.plan == 'free_trial'
-        ? 'Free Trial'
-        : (sub?.plan == 'monthly' || sub?.plan == 'professional_monthly')
-            ? 'Professional Monthly'
-            : (sub?.plan == 'yearly' || sub?.plan == 'professional_yearly')
-                ? 'Professional Yearly'
-                : sub?.plan == 'premium_monthly'
-                    ? 'Premium Monthly'
-                    : sub?.plan == 'premium_yearly'
-                        ? 'Premium Yearly'
-                        : sub?.plan.toUpperCase() ?? '';
+    final planDisplayName = sub?.planDetails.displayName ?? 'Free Plan';
 
     // Local Search & Sort
     List<QueryDocumentSnapshot<Map<String, dynamic>>> filteredMembers =
@@ -1519,7 +1562,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
           final name = data['name'] ?? '';
           final mobile = data['mobile'] ?? '';
           final role = data['role'] ?? 'member';
-          final otp = data['otp'] ?? '';
+          final code = (data['activationCode'] ?? data['otp'] ?? data['activationToken'] ?? '').toString();
           final expiresAtStr = data['expiresAt'] ?? '';
 
           String formattedExpiry = '';
@@ -1542,7 +1585,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
                 Text('$mobile • ${role.toString().toUpperCase()}'),
                 const SizedBox(height: 2),
                 SelectableText(
-                  'OTP Invite Code: $otp',
+                  'Activation Code: $code',
                   style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       color: Color(0xFFF47C20),
@@ -1560,7 +1603,7 @@ class _TeamManagementScreenState extends State<TeamManagementScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.refresh, color: Colors.green),
-                  tooltip: 'Resend / Refresh Invite Code',
+                  tooltip: 'Resend / Refresh Activation Code',
                   onPressed: () =>
                       _resendInvitation(inviteId, name, mobile, role),
                 ),

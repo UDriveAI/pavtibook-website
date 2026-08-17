@@ -1,9 +1,95 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import '../config/subscription_config.dart';
 import '../models/models.dart';
 
 class SubscriptionService {
-  // Upgrade organization plan to monthly (using Firestore transaction)
+  /// Upgrade organization plan using a safe Firestore transaction
+  static Future<void> upgradePlan({
+    required String orgId,
+    required String targetPlanId,
+    required String oldPlan,
+    required String operatorName,
+    String? transactionId,
+  }) async {
+    final planDetails = SubscriptionPlanConfig.getPlan(targetPlanId);
+    final now = DateTime.now();
+
+    String? renewalDate;
+    if (planDetails.billingPeriod == 'monthly') {
+      renewalDate = now.add(const Duration(days: 30)).toIso8601String();
+    } else if (planDetails.billingPeriod == 'yearly') {
+      renewalDate = now.add(const Duration(days: 365)).toIso8601String();
+    } else {
+      renewalDate = null; // Lifetime / Free
+    }
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final subRef =
+          FirebaseFirestore.instance.collection('subscriptions').doc(orgId);
+      final orgRef =
+          FirebaseFirestore.instance.collection('organizations').doc(orgId);
+      final historyRef =
+          FirebaseFirestore.instance.collection('subscription_history').doc();
+
+      // Read current documents inside transaction (mandatory first step)
+      await transaction.get(subRef);
+      await transaction.get(orgRef);
+
+      transaction.set(
+        subRef,
+        {
+          'plan': planDetails.id,
+          'receiptLimit': planDetails.receiptLimit,
+          'usersLimit': planDetails.usersLimit,
+          'autoWhatsAppLimit': planDetails.autoWhatsAppLimit,
+          'canShareNow': planDetails.canShareNow,
+          'status': planDetails.subscriptionStatus,
+          'renewalDate': renewalDate,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      transaction.update(orgRef, {
+        'subscription_plan': planDetails.id,
+      });
+
+      transaction.set(historyRef, {
+        'id': historyRef.id,
+        'organizationId': orgId,
+        'oldPlan': oldPlan,
+        'newPlan': planDetails.id,
+        'amountPaid': planDetails.price,
+        'receiptLimit': planDetails.receiptLimit,
+        'usersLimit': planDetails.usersLimit,
+        'autoWhatsAppLimit': planDetails.autoWhatsAppLimit,
+        'activatedAt': now.toIso8601String(),
+        'expiresAt': renewalDate,
+        'operator': operatorName,
+        'status': 'success',
+        'razorpayTransactionId':
+            transactionId ?? 'rzp_test_${now.millisecondsSinceEpoch}',
+      });
+    });
+
+    // Write audit log entry
+    try {
+      await FirebaseFirestore.instance.collection('activity_logs').add({
+        'organizationId': orgId,
+        'userId': 'system',
+        'userName': operatorName,
+        'userRole': 'owner',
+        'action': 'Subscription Upgraded',
+        'details': 'Upgraded subscription from $oldPlan to ${planDetails.displayName}',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Error writing subscription activity log: $e');
+    }
+  }
+
+  // Legacy wrappers for backward compatibility
   static Future<void> upgradeToMonthly({
     required String orgId,
     required double price,
@@ -12,56 +98,16 @@ class SubscriptionService {
     required String oldPlan,
     required String operatorName,
     String? transactionId,
-  }) async {
-    final now = DateTime.now();
-    final renewalDate = now.add(const Duration(days: 30)).toIso8601String();
-
-    await FirebaseFirestore.instance.runTransaction((transaction) async {
-      final subRef =
-          FirebaseFirestore.instance.collection('subscriptions').doc(orgId);
-      final orgRef =
-          FirebaseFirestore.instance.collection('organizations').doc(orgId);
-      final historyRef =
-          FirebaseFirestore.instance.collection('subscription_history').doc();
-
-      // Read current documents inside the transaction (mandatory first step)
-      await transaction.get(subRef);
-      await transaction.get(orgRef);
-
-      transaction.set(
-          subRef,
-          {
-            'plan': 'monthly',
-            'receiptLimit': receiptLimit,
-            'usersLimit': usersLimit,
-            'renewalDate': renewalDate,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-
-      transaction.update(orgRef, {
-        'subscription_plan': 'monthly',
-      });
-
-      transaction.set(historyRef, {
-        'id': historyRef.id,
-        'organizationId': orgId,
-        'oldPlan': oldPlan,
-        'newPlan': 'monthly',
-        'amountPaid': price,
-        'receiptLimit': receiptLimit,
-        'usersLimit': usersLimit,
-        'activatedAt': now.toIso8601String(),
-        'expiresAt': renewalDate,
-        'operator': operatorName,
-        'status': 'success',
-        'razorpayTransactionId':
-            transactionId ?? 'rzp_test_${now.millisecondsSinceEpoch}',
-      });
-    });
+  }) {
+    return upgradePlan(
+      orgId: orgId,
+      targetPlanId: SubscriptionPlanConfig.planProfessionalMonthly,
+      oldPlan: oldPlan,
+      operatorName: operatorName,
+      transactionId: transactionId,
+    );
   }
 
-  // Upgrade organization plan to yearly (using Firestore transaction)
   static Future<void> upgradeToYearly({
     required String orgId,
     required double price,
@@ -70,73 +116,15 @@ class SubscriptionService {
     required String oldPlan,
     required String operatorName,
     String? transactionId,
-  }) async {
-    final now = DateTime.now();
-    final renewalDate = now.add(const Duration(days: 365)).toIso8601String();
-
-    await FirebaseFirestore.instance.runTransaction((transaction) async {
-      final subRef =
-          FirebaseFirestore.instance.collection('subscriptions').doc(orgId);
-      final orgRef =
-          FirebaseFirestore.instance.collection('organizations').doc(orgId);
-      final historyRef =
-          FirebaseFirestore.instance.collection('subscription_history').doc();
-
-      // Read current documents inside the transaction (mandatory first step)
-      await transaction.get(subRef);
-      await transaction.get(orgRef);
-
-      transaction.set(
-          subRef,
-          {
-            'plan': 'yearly',
-            'receiptLimit': receiptLimit,
-            'usersLimit': usersLimit,
-            'renewalDate': renewalDate,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-
-      transaction.update(orgRef, {
-        'subscription_plan': 'yearly',
-      });
-
-      transaction.set(historyRef, {
-        'id': historyRef.id,
-        'organizationId': orgId,
-        'oldPlan': oldPlan,
-        'newPlan': 'yearly',
-        'amountPaid': price,
-        'receiptLimit': receiptLimit,
-        'usersLimit': usersLimit,
-        'activatedAt': now.toIso8601String(),
-        'expiresAt': renewalDate,
-        'operator': operatorName,
-        'status': 'success',
-        'razorpayTransactionId':
-            transactionId ?? 'rzp_test_${now.millisecondsSinceEpoch}',
-      });
-    });
+  }) {
+    return upgradePlan(
+      orgId: orgId,
+      targetPlanId: SubscriptionPlanConfig.planProfessionalYearly,
+      oldPlan: oldPlan,
+      operatorName: operatorName,
+      transactionId: transactionId,
+    );
   }
-
-  // TODO: Add Razorpay SDK checkout integration hook here
-  // Example integration structure:
-  // Future<void> startRazorpayCheckout({
-  //   required double amount,
-  //   required String name,
-  //   required String description,
-  //   required String contact,
-  //   required String email,
-  // }) async {
-  //   var options = {
-  //     'key': 'rzp_live_xxxxxxxxxxxxxx',
-  //     'amount': amount * 100, // in paisa
-  //     'name': name,
-  //     'description': description,
-  //     'prefill': {'contact': contact, 'email': email},
-  //   };
-  //   _razorpay.open(options);
-  // }
 
   // Fetch current subscription document
   static Future<SubscriptionModel> fetchCurrentSubscription(
@@ -149,19 +137,19 @@ class SubscriptionService {
       if (doc.exists) {
         return SubscriptionModel.fromJson(doc.data()!);
       } else {
-        // Automatically create and return default
-        final config = await fetchSubscriptionConfig();
+        // Automatically create and return default Free plan
         final defaultSub = {
           'id': orgId,
           'organizationId': orgId,
-          'plan': 'free_trial',
+          'plan': SubscriptionPlanConfig.planFree,
           'receiptsUsed': 0,
-          'receiptLimit': config['free_trial_receipts'] ?? 10,
+          'receiptLimit': 10,
           'usersUsed': 1,
           'usersLimit': 1,
-          'renewalDate': DateTime.now()
-              .add(Duration(days: config['trial_valid_days'] ?? 30))
-              .toIso8601String(),
+          'autoWhatsAppLimit': 0,
+          'canShareNow': true,
+          'status': 'free',
+          'renewalDate': null,
           'createdAt': DateTime.now().toIso8601String(),
           'updatedAt': DateTime.now().toIso8601String(),
         };
@@ -177,13 +165,11 @@ class SubscriptionService {
       return SubscriptionModel(
         id: orgId,
         organizationId: orgId,
-        plan: 'free_trial',
+        plan: SubscriptionPlanConfig.planFree,
         receiptsUsed: 0,
-        receiptLimit: 10,
         usersUsed: 1,
-        usersLimit: 1,
-        renewalDate:
-            DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+        renewalDate: null,
+        status: 'free',
         createdAt: DateTime.now().toIso8601String(),
         updatedAt: DateTime.now().toIso8601String(),
       );
@@ -197,17 +183,12 @@ class SubscriptionService {
       'yearly_price': 999,
       'monthly_users': 3,
       'yearly_users': 3,
-      'monthly_receipts': 999999,
-      'yearly_receipts': 999999,
       'premium_monthly_price': 199,
       'premium_yearly_price': 1999,
       'premium_users': 10,
-      'free_trial_receipts': 10,
+      'free_receipts': 10,
       'invite_expiry_days': 7,
       'max_pending_invites': 5,
-      'trial_valid_days': 30,
-      'subscription_reminder_days': 7,
-      'grace_period_days': 7,
     };
     try {
       final doc = await FirebaseFirestore.instance
@@ -231,37 +212,17 @@ class SubscriptionService {
 
   // Helper to fetch details about all plans
   static Map<String, dynamic> getAvailablePlans(Map<String, dynamic> config) {
-    return {
-      'free_trial': {
-        'name': 'Free Trial',
-        'price': 0,
-        'receiptLimit': config['free_trial_receipts'] ?? 10,
-        'usersLimit': 1,
-      },
-      'monthly': {
-        'name': 'Monthly Plan',
-        'price': config['monthly_price'] ?? 99,
-        'receiptLimit': config['monthly_receipts'] ?? 999999,
-        'usersLimit': config['monthly_users'] ?? 3,
-      },
-      'yearly': {
-        'name': 'Yearly Plan',
-        'price': config['yearly_price'] ?? 999,
-        'receiptLimit': config['yearly_receipts'] ?? 999999,
-        'usersLimit': config['yearly_users'] ?? 3,
-      },
-      'premium_monthly': {
-        'name': 'Premium Monthly Plan',
-        'price': config['premium_monthly_price'] ?? 199,
-        'receiptLimit': 999999,
-        'usersLimit': config['premium_users'] ?? 10,
-      },
-      'premium_yearly': {
-        'name': 'Premium Yearly Plan',
-        'price': config['premium_yearly_price'] ?? 1999,
-        'receiptLimit': 999999,
-        'usersLimit': config['premium_users'] ?? 10,
-      }
-    };
+    return SubscriptionPlanConfig.plans.map(
+      (key, plan) => MapEntry(key, {
+        'id': plan.id,
+        'name': plan.displayName,
+        'price': plan.price,
+        'receiptLimit': plan.receiptLimit,
+        'usersLimit': plan.usersLimit,
+        'isUnlimitedReceipts': plan.isUnlimitedReceipts,
+        'autoWhatsAppLimit': plan.autoWhatsAppLimit,
+        'canShareNow': plan.canShareNow,
+      }),
+    );
   }
 }

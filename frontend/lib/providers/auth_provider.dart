@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
@@ -6,25 +7,76 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../models/models.dart';
 import '../services/image_processing_service.dart';
+import '../services/registration_validator.dart';
+import '../main.dart';
 
 class AuthProvider with ChangeNotifier {
   UserModel? _user;
   OrganizationModel? _organization;
+  int _switchGeneration = 0;
+  String? _activeRole;
   bool _isLoading = false;
   String? _errorMessage;
   SubscriptionModel? _subscription;
   String? _lastRegisteredOrgId;
+  bool _needsOrgRegistration = false;
+
+  String? _pendingLinkingEmail;
+  PhoneAuthCredential? _pendingPhoneCredential;
+  AuthCredential? _pendingGoogleCredential;
 
   UserModel? get user => _user;
   OrganizationModel? get organization => _organization;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
+  bool get needsOrgRegistration => _needsOrgRegistration;
+  String? get pendingLinkingEmail => _pendingLinkingEmail;
   SubscriptionModel? get subscription => _subscription;
   String? get lastRegisteredOrgId => _lastRegisteredOrgId;
+
+  int get switchGeneration => _switchGeneration;
+  String? get activeOrganizationId => _organization?.id;
+  OrganizationModel? get activeOrganization => _organization;
+  String get activeUserRole => _activeRole ?? _user?.role ?? 'member';
+
+  Future<String> resolveActiveRole(String uid, String orgId, Map<String, dynamic>? orgData) async {
+    final ownerUid = orgData?['ownerUid'] ?? orgData?['owner_uid'];
+    if (ownerUid != null && ownerUid == uid) {
+      return 'owner';
+    }
+
+    try {
+      final memberDoc = await FirebaseFirestore.instance
+          .collection('organization_members')
+          .doc('${uid}_${orgId}')
+          .get();
+      if (memberDoc.exists && memberDoc.data()?['role'] != null) {
+        return memberDoc.data()!['role'].toString().toLowerCase();
+      }
+
+      final querySnap = await FirebaseFirestore.instance
+          .collection('organization_members')
+          .where('userId', isEqualTo: uid)
+          .where('organizationId', isEqualTo: orgId)
+          .limit(1)
+          .get();
+      if (querySnap.docs.isNotEmpty) {
+        final r = querySnap.docs.first.data()['role'];
+        if (r != null) return r.toString().toLowerCase();
+      }
+    } catch (e) {
+      debugPrint('Error resolving role for org $orgId: $e');
+    }
+
+    return _user?.role ?? 'member';
+  }
+
 
   Map<String, dynamic> _subConfig = {
     'monthly_price': 99,
@@ -61,44 +113,50 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _subListener;
+
+  void cancelSubListener() {
+    _subListener?.cancel();
+    _subListener = null;
+  }
+
   Future<void> loadSubscription(String orgId) async {
     try {
-      final subDoc = await FirebaseFirestore.instance
+      _subListener?.cancel();
+      _subListener = FirebaseFirestore.instance
           .collection('subscriptions')
           .doc(orgId)
-          .get();
-      if (subDoc.exists) {
-        final data = Map<String, dynamic>.from(subDoc.data()!);
-        final isFromCache = subDoc.metadata.isFromCache;
-        if (isFromCache && data['plan'] != 'free_trial') {
-          // Force fallback to free trial constraints if offline (to prevent cached premium unlocks)
-          data['plan'] = 'free_trial';
-          data['receiptLimit'] = 10;
-          data['usersLimit'] = 1;
+          .snapshots()
+          .listen((subDoc) async {
+        if (subDoc.exists) {
+          final data = Map<String, dynamic>.from(subDoc.data()!);
+          _subscription = SubscriptionModel.fromJson(data);
+        } else {
+          final defaultSub = {
+            'id': orgId,
+            'organizationId': orgId,
+            'plan': 'free',
+            'receiptsUsed': 0,
+            'receiptLimit': 10,
+            'usersUsed': 1,
+            'usersLimit': 1,
+            'autoWhatsAppLimit': 0,
+            'canShareNow': true,
+            'status': 'free',
+            'renewalDate': null,
+            'createdAt': DateTime.now().toIso8601String(),
+            'updatedAt': DateTime.now().toIso8601String(),
+          };
+          await FirebaseFirestore.instance
+              .collection('subscriptions')
+              .doc(orgId)
+              .set(defaultSub);
+          _subscription = SubscriptionModel.fromJson(defaultSub);
         }
-        _subscription = SubscriptionModel.fromJson(data);
-      } else {
-        final defaultSub = {
-          'id': orgId,
-          'organizationId': orgId,
-          'plan': 'free_trial',
-          'receiptsUsed': 0,
-          'receiptLimit': _subConfig['free_trial_receipts'] ?? 10,
-          'usersUsed': 1,
-          'usersLimit': 1,
-          'renewalDate': DateTime.now()
-              .add(Duration(days: _subConfig['trial_valid_days'] ?? 30))
-              .toIso8601String(),
-          'createdAt': DateTime.now().toIso8601String(),
-          'updatedAt': DateTime.now().toIso8601String(),
-        };
-        await FirebaseFirestore.instance
-            .collection('subscriptions')
-            .doc(orgId)
-            .set(defaultSub);
-        _subscription = SubscriptionModel.fromJson(defaultSub);
-      }
-      notifyListeners();
+        notifyListeners();
+      }, onError: (e) {
+        debugPrint('Error listening to subscription changes: $e');
+      });
     } catch (e) {
       debugPrint('Failed to load subscription for org $orgId: $e');
     }
@@ -118,6 +176,7 @@ class AuthProvider with ChangeNotifier {
             .get();
         if (userDoc.exists) {
           final userData = userDoc.data()!;
+          await _migrateUserData(currentUser.uid, userData);
           _user = UserModel.fromJson(userData);
           final orgId =
               userData['organization_id'] ?? userData['organizationId'];
@@ -127,12 +186,22 @@ class AuthProvider with ChangeNotifier {
                 .doc(orgId)
                 .get();
             if (orgDoc.exists) {
-              var orgData = orgDoc.data()!;
-              orgData = await _ensureOwnerFields(orgId, currentUser.uid, userData, orgData);
+              final orgData = orgDoc.data()!;
               _organization = OrganizationModel.fromJson(orgData);
-              await fetchSubscriptionConfig();
-              await loadSubscription(orgId);
+
+              // Parallelize independent post-organization loading operations
+              await Future.wait([
+                resolveActiveRole(currentUser.uid, orgId, orgData)
+                    .then((r) => _activeRole = r),
+                fetchSubscriptionConfig(),
+                loadSubscription(orgId),
+                loadUserOrganizations(currentUser.uid),
+              ]);
+            } else {
+              await loadUserOrganizations(currentUser.uid);
             }
+          } else {
+            await loadUserOrganizations(currentUser.uid);
           }
           _errorMessage = null;
         } else {
@@ -158,54 +227,113 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final adminEmail = regData['adminEmail'];
+      final adminMobile = regData['adminMobile'] ?? regData['orgMobile'] ?? '';
       final password = regData['password'];
 
-      // 0. Trial Protection
+      // 1. Get or Create User in Firebase Auth
+      String uid;
+      User? newlyCreatedAuthUser;
+      final existingAuthUser = FirebaseAuth.instance.currentUser;
+      if (existingAuthUser != null) {
+        uid = existingAuthUser.uid;
+        debugPrint('[REGISTER_FLOW] [STEP 1 SUCCESS] Using existing authenticated Auth user with UID: $uid');
+      } else {
+        debugPrint(
+            '[REGISTER_FLOW] [STEP 1] Attempting FirebaseAuth.createUserWithEmailAndPassword for email: $adminEmail');
+        try {
+          final authResult = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: adminEmail,
+            password: password ?? '',
+          );
+          newlyCreatedAuthUser = authResult.user;
+          uid = authResult.user!.uid;
+        } on FirebaseAuthException catch (fae, stack) {
+          debugPrint('[REGISTER_FLOW] [STEP 1 FAILED] FirebaseAuthException:');
+          debugPrint('  File: $fileIdentifier');
+          debugPrint('  Code: ${fae.code}');
+          debugPrint('  Message: ${fae.message}');
+          debugPrint('  Stacktrace: $stack');
+          if (fae.code == 'email-already-in-use') {
+            _errorMessage = 'This email is already registered. Please log in.';
+          } else {
+            _errorMessage = fae.message ?? 'Registration failed.';
+          }
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        } catch (e, stack) {
+          debugPrint('[REGISTER_FLOW] [STEP 1 FAILED] Unknown Exception: $e');
+          _errorMessage = e.toString();
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+      }
+
+      // 1.2. Perform Mobile Uniqueness Check (after Auth creation so the user is authenticated to read Firestore)
+      debugPrint('[REGISTER_FLOW] [STEP 1.2] Checking mobile uniqueness...');
+      String cleanMobile = adminMobile.replaceAll(RegExp(r'\D'), '');
+      if (cleanMobile.startsWith('91') && cleanMobile.length > 10) {
+        cleanMobile = cleanMobile.substring(2);
+      }
+
+      try {
+        final mobileQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('mobile', whereIn: [
+              adminMobile,
+              cleanMobile,
+              '+91$cleanMobile',
+              '+91 $cleanMobile'
+            ])
+            .limit(1)
+            .get();
+
+        if (mobileQuery.docs.isNotEmpty) {
+          debugPrint('[REGISTER_FLOW] [STEP 1.2 FAILED] Mobile number already registered.');
+          _errorMessage = 'This mobile number is already registered. Please log in.';
+          
+          if (newlyCreatedAuthUser != null) {
+            debugPrint('[REGISTER_FLOW] Deleting temporary Auth user to maintain atomicity...');
+            await newlyCreatedAuthUser.delete();
+          }
+          
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+      } catch (e) {
+        debugPrint('[REGISTER_FLOW] [STEP 1.2 FAILED] Validation error: $e');
+        _errorMessage = 'Validation error: $e';
+        if (newlyCreatedAuthUser != null) {
+          await newlyCreatedAuthUser.delete();
+        }
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // 1.5. Trial Protection (run after user is signed in to avoid unauthenticated read errors)
       final orgName = regData['orgName'] ?? '';
       final city = regData['city'] ?? '';
       final orgMobile = regData['orgMobile'] ?? '';
 
-      final existingOrgQuery = await FirebaseFirestore.instance
-          .collection('organizations')
-          .where('name', isEqualTo: orgName)
-          .where('city', isEqualTo: city)
-          .where('mobile', isEqualTo: orgMobile)
-          .get();
-
-      if (existingOrgQuery.docs.isNotEmpty) {
-        throw Exception(
-            'An organization with this Name, City, and Owner Mobile has already registered a Free Trial. Multiple free trials are not allowed.');
-      }
-
-      // 1. Create User in Firebase Auth
-      debugPrint(
-          '[REGISTER_FLOW] [STEP 1] Attempting FirebaseAuth.createUserWithEmailAndPassword for email: $adminEmail');
-      UserCredential authResult;
       try {
-        authResult = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: adminEmail,
-          password: password,
-        );
-      } on FirebaseAuthException catch (fae, stack) {
-        debugPrint('[REGISTER_FLOW] [STEP 1 FAILED] FirebaseAuthException:');
-        debugPrint('  File: $fileIdentifier');
-        debugPrint('  Line: ~64 (createUserWithEmailAndPassword)');
-        debugPrint('  Code: ${fae.code}');
-        debugPrint('  Message: ${fae.message}');
-        debugPrint('  Stacktrace: $stack');
-        rethrow;
-      } catch (e, stack) {
-        debugPrint('[REGISTER_FLOW] [STEP 1 FAILED] Unknown Exception:');
-        debugPrint('  File: $fileIdentifier');
-        debugPrint('  Line: ~64 (createUserWithEmailAndPassword)');
-        debugPrint('  Error: $e');
-        debugPrint('  Stacktrace: $stack');
-        rethrow;
-      }
+        final existingOrgQuery = await FirebaseFirestore.instance
+            .collection('organizations')
+            .where('name', isEqualTo: orgName)
+            .where('city', isEqualTo: city)
+            .where('mobile', isEqualTo: orgMobile)
+            .get();
 
-      final uid = authResult.user!.uid;
-      debugPrint(
-          '[REGISTER_FLOW] [STEP 1 SUCCESS] User created in Auth with UID: $uid');
+        if (existingOrgQuery.docs.isNotEmpty) {
+          throw Exception(
+              'An organization with this Name, City, and Owner Mobile has already registered a Free Trial. Multiple free trials are not allowed.');
+        }
+      } on Exception catch (e) {
+        if (e.toString().contains('Multiple free trials')) rethrow;
+        debugPrint('[REGISTER_FLOW] Trial check skipped or passed: $e');
+      }
 
       // 2. Create Organization Doc in Firestore
       debugPrint(
@@ -233,7 +361,7 @@ class AuthProvider with ChangeNotifier {
         'registration_number': regData['registrationNumber'],
         'logo_url': null,
         'is_verified': false,
-        'subscription_plan': 'free',
+        'subscription_plan': 'free_trial',
         'createdAt': FieldValue.serverTimestamp(),
         'organizationVersion': 1,
       };
@@ -324,11 +452,13 @@ class AuthProvider with ChangeNotifier {
           'organizationId': orgId,
           'plan': 'free_trial',
           'receiptsUsed': 0,
-          'receiptLimit': _subConfig['free_trial_receipts'] ?? 10,
+          'receiptLimit': 10,
           'usersUsed': 1,
           'usersLimit': 1,
-          'renewalDate':
-              DateTime.now().add(const Duration(days: 30)).toIso8601String(),
+          'autoWhatsAppLimit': 0,
+          'canShareNow': true,
+          'status': 'free_trial',
+          'renewalDate': null,
           'createdAt': DateTime.now().toIso8601String(),
           'updatedAt': DateTime.now().toIso8601String(),
         };
@@ -421,55 +551,245 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
-  // Email and Password Login
-  Future<bool> loginEmail(String email, String password) async {
+  /// Switch active organization context with race condition initialization lock
+  Future<bool> switchOrganization(String orgId) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
+    _switchGeneration++;
+    final currentGen = _switchGeneration;
+
     try {
-      final authResult = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      final uid = authResult.user!.uid;
-
-      final userDoc =
-          await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      if (userDoc.exists) {
-        final userData = userDoc.data()!;
-        _user = UserModel.fromJson(userData);
-        final orgId = userData['organization_id'] ?? userData['organizationId'];
-        if (orgId != null) {
-          final orgDoc = await FirebaseFirestore.instance
-              .collection('organizations')
-              .doc(orgId)
-              .get();
-          if (orgDoc.exists) {
-            _organization = OrganizationModel.fromJson(orgDoc.data()!);
-            await fetchSubscriptionConfig();
-            await loadSubscription(orgId);
-
-            // Log login activity
-            FirebaseFirestore.instance.collection('activity_logs').add({
-              'organizationId': orgId,
-              'userId': uid,
-              'userName': _user?.name ?? 'User',
-              'userRole': _user?.role ?? 'member',
-              'action': 'Login',
-              'details': '${_user?.name} logged in successfully',
-              'timestamp': DateTime.now().toIso8601String(),
-            }).catchError((_) {});
-          }
-        }
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? _user?.id;
+      if (uid == null) {
+        _errorMessage = 'User not authenticated.';
         _isLoading = false;
         notifyListeners();
-        return true;
-      } else {
-        _errorMessage = 'User profile not found.';
+        return false;
       }
+
+      final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+      if (!orgDoc.exists) {
+        _errorMessage = 'Organization not found.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // Check initialization lock / race condition
+      if (currentGen != _switchGeneration) {
+        debugPrint('[ORG_SWITCH] Aborted switch to $orgId due to rapid switch race condition.');
+        return false;
+      }
+
+      final orgData = orgDoc.data()!;
+      final resolvedRole = await resolveActiveRole(uid, orgId, orgData);
+
+      if (currentGen != _switchGeneration) {
+        debugPrint('[ORG_SWITCH] Aborted switch to $orgId post role-resolution due to rapid switch.');
+        return false;
+      }
+
+      _organization = OrganizationModel.fromJson(orgData);
+      _activeRole = resolvedRole;
+
+      // Save lastSelectedOrgId in user profile (only lastSelectedOrgId is updated;
+      // root organizationId is immutable on users collection per security rules)
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(uid).set({
+          'lastSelectedOrgId': orgId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('[FIRESTORE_DENIED_AUDIT] Path: users/$uid | Operation: set(lastSelectedOrgId) | Error: $e');
+      }
+
+      // Reload active subscription stream, config & user organization memberships safely
+      try {
+        await fetchSubscriptionConfig();
+        await loadSubscription(orgId);
+        await loadUserOrganizations(uid);
+      } catch (e) {
+        debugPrint('[FIRESTORE_DENIED_AUDIT] Path: subscriptions/orgs | Error: $e');
+      }
+
+      // Audit Log for organization switch (optional write — fail gracefully)
+      try {
+        await FirebaseFirestore.instance.collection('activity_logs').add({
+          'organizationId': orgId,
+          'userId': uid,
+          'userName': _user?.name ?? 'User',
+          'userRole': _activeRole ?? 'member',
+          'action': 'Organization Switched',
+          'details': '${_user?.name} switched active organization to ${_organization?.name}',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint('[FIRESTORE_DENIED_AUDIT] Path: activity_logs | Operation: add | Error: $e');
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('[FIRESTORE_DENIED_AUDIT] Path: switchOrganization | Error: $e');
+      _errorMessage = 'Failed to switch organization: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  List<Map<String, dynamic>> _userOrganizations = [];
+  List<Map<String, dynamic>> get userOrganizations => _userOrganizations;
+  bool get hasMultipleOrganizations => _userOrganizations.length > 1;
+
+  /// Get list of all organization memberships for a user
+  Future<List<Map<String, dynamic>>> loadUserOrganizations(String uid) async {
+    try {
+      final membersSnap = await FirebaseFirestore.instance
+          .collection('organization_members')
+          .where('userId', isEqualTo: uid)
+          .get();
+
+      List<Map<String, dynamic>> results = [];
+      Set<String> seenOrgIds = {};
+
+      for (var doc in membersSnap.docs) {
+        final data = doc.data();
+        final orgId = data['organizationId'];
+        if (orgId != null && orgId.toString().isNotEmpty && !seenOrgIds.contains(orgId.toString())) {
+          seenOrgIds.add(orgId.toString());
+          final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+          if (orgDoc.exists) {
+            results.add({
+              'membershipId': doc.id,
+              'organizationId': orgId,
+              'organizationName': orgDoc.data()?['name'] ?? 'Organization',
+              'role': data['role'] ?? 'member',
+              'joinedAt': data['joinedAt'] ?? '',
+            });
+          }
+        }
+      }
+
+      // Include user's current primary organization if not already in membership results
+      final primaryOrgId = _user?.lastSelectedOrgId ?? _user?.organizationId;
+      if (primaryOrgId != null && primaryOrgId.isNotEmpty && !seenOrgIds.contains(primaryOrgId)) {
+        seenOrgIds.add(primaryOrgId);
+        final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(primaryOrgId).get();
+        if (orgDoc.exists) {
+          results.add({
+            'membershipId': 'owner_$primaryOrgId',
+            'organizationId': primaryOrgId,
+            'organizationName': orgDoc.data()?['name'] ?? 'Organization',
+            'role': _user?.role ?? 'owner',
+            'joinedAt': '',
+          });
+        }
+      }
+
+      _userOrganizations = results;
+      notifyListeners();
+      return results;
+    } catch (e) {
+      debugPrint('[AUTH_PROVIDER] Error loading user organizations: $e');
+      return _userOrganizations;
+    }
+  }
+
+  /// Securely resolves a 10-digit mobile number to a registered email address.
+  /// First invokes the Cloud Function `resolveMobileToEmail`.
+  /// Fallbacks to direct query if offline/local dev.
+  Future<String?> _resolveMobileToEmail(String mobile) async {
+    final cleanMobile = mobile.trim().replaceAll(RegExp(r'\D'), '');
+    if (cleanMobile.length < 10) return null;
+    final tenDigit = cleanMobile.substring(cleanMobile.length - 10);
+
+    // 1. Primary: HTTPS Callable Cloud Function endpoint
+    try {
+      final url = Uri.parse(
+          'https://asia-south1-pavtibook-7251a.cloudfunctions.net/resolveMobileToEmail');
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'data': {'mobile': tenDigit}
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final jsonBody = jsonDecode(response.body);
+        final result = jsonBody['result'];
+        if (result != null &&
+            result['success'] == true &&
+            result['email'] != null) {
+          return result['email'] as String;
+        }
+      }
+    } catch (e) {
+      debugPrint('[MOBILE_RESOLVER] Cloud Function call error: $e');
+    }
+
+    // 2. Secondary Fallback: Firestore Admin/Users search (For local offline resilience)
+    try {
+      final formattedWithPlus = '+91$tenDigit';
+      final querySnap = await FirebaseFirestore.instance
+          .collection('users')
+          .where('mobile', whereIn: [tenDigit, formattedWithPlus])
+          .limit(1)
+          .get();
+
+      if (querySnap.docs.isNotEmpty) {
+        final email = querySnap.docs.first.data()['email'] as String?;
+        if (email != null && email.contains('@')) return email;
+      }
+    } catch (e) {
+      debugPrint('[MOBILE_RESOLVER] Local fallback search error: $e');
+    }
+
+    return null;
+  }
+
+  /// Unified Login method accepting either Email or Mobile + Password
+  Future<bool> loginEmailOrMobile(String identifier, String password) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    String targetEmail = identifier.trim();
+
+    // If identifier does not contain '@', resolve mobile -> email
+    if (!targetEmail.contains('@')) {
+      final resolvedEmail = await _resolveMobileToEmail(targetEmail);
+      if (resolvedEmail == null) {
+        _errorMessage = 'Invalid credentials or account not found.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+      targetEmail = resolvedEmail;
+    }
+
+    try {
+      final authResult = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: targetEmail,
+        password: password,
+      );
+      final user = authResult.user!;
+
+      final success = await _loadAndMigrateUserProfile(user);
+      _isLoading = false;
+      notifyListeners();
+      return success;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'invalid-credential' || e.code == 'wrong-password' || e.code == 'user-not-found' || e.code == 'invalid-email') {
+      if (e.code == 'invalid-credential' ||
+          e.code == 'wrong-password' ||
+          e.code == 'user-not-found' ||
+          e.code == 'invalid-email') {
         _errorMessage = 'Incorrect email or password.';
       } else if (e.code == 'user-disabled') {
         _errorMessage = 'This account has been disabled. Please contact support.';
@@ -487,9 +807,269 @@ class AuthProvider with ChangeNotifier {
     return false;
   }
 
+  /// Legacy alias for loginEmail
+  Future<bool> loginEmail(String email, String password) async {
+    return loginEmailOrMobile(email, password);
+  }
+
+  /// Authenticate using Google Sign-In and Firebase Auth GoogleAuthProvider
+  Future<bool> loginWithGoogle() async {
+    _isLoading = true;
+    _errorMessage = null;
+    _needsOrgRegistration = false;
+    notifyListeners();
+
+    try {
+      const String webClientId = '780452591351-ligh78331iu5s341ehm75o2ucnnbf6iu.apps.googleusercontent.com';
+      try {
+        await GoogleSignIn.instance.initialize(
+          serverClientId: webClientId,
+        );
+      } catch (e) {
+        debugPrint('GoogleSignIn.instance.initialize note: $e');
+      }
+
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
+
+      if (googleUser == null) {
+        // User cancelled Google login prompt
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      UserCredential userCredential;
+      try {
+        userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'account-exists-with-different-credential') {
+          _pendingGoogleCredential = credential;
+          _pendingLinkingEmail = e.email ?? googleUser.email;
+          _errorMessage = 'account-exists-with-different-credential:${_pendingLinkingEmail}';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        } else {
+          _errorMessage = e.message ?? 'Google Sign-In authentication failed.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+      }
+
+      final User user = userCredential.user!;
+
+      // Check if user has an existing Firestore user document and organization
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data()!;
+        final orgId = userData['lastSelectedOrgId'] ?? userData['organization_id'] ?? userData['organizationId'];
+
+        final membersSnap = await FirebaseFirestore.instance
+            .collection('organization_members')
+            .where('userId', isEqualTo: user.uid)
+            .limit(1)
+            .get();
+
+        if (orgId != null || membersSnap.docs.isNotEmpty) {
+          // EXISTING GOOGLE USER WITH ORGANIZATION
+          final success = await _loadAndMigrateUserProfile(user);
+          _needsOrgRegistration = false;
+          _isLoading = false;
+          notifyListeners();
+          return success;
+        } else {
+          // User doc exists but has no organization -> Needs org registration
+          await _loadAndMigrateUserProfile(user);
+          _needsOrgRegistration = true;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        }
+      } else {
+        // NEW GOOGLE USER -> Create user doc in Firestore and flag for org registration
+        final newUserDoc = {
+          'id': user.uid,
+          'email': user.email ?? googleUser.email,
+          'mobile': user.phoneNumber ?? '',
+          'name': (user.displayName != null && user.displayName!.isNotEmpty)
+              ? user.displayName
+              : (googleUser.displayName != null && googleUser.displayName!.isNotEmpty)
+                  ? googleUser.displayName
+                  : 'User',
+          'photoUrl': user.photoURL ?? googleUser.photoUrl ?? '',
+          'authProvider': 'google',
+          'createdAt': DateTime.now().toIso8601String(),
+          'updatedAt': DateTime.now().toIso8601String(),
+        };
+
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(newUserDoc);
+        _user = UserModel.fromJson(newUserDoc);
+        _needsOrgRegistration = true;
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('loginWithGoogle Exception: $e');
+      _errorMessage = 'Google Sign-In failed: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Safely link pending Google credential after authenticating with existing provider password
+  Future<bool> linkPendingGoogleCredentialWithPassword(String password) async {
+    if (_pendingGoogleCredential == null || _pendingLinkingEmail == null || _pendingLinkingEmail!.isEmpty) {
+      _errorMessage = 'No pending Google credential to link.';
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final UserCredential existingUserCred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _pendingLinkingEmail!,
+        password: password,
+      );
+
+      // Link Google credential to existing Firebase Auth user
+      await existingUserCred.user!.linkWithCredential(_pendingGoogleCredential!);
+      
+      _pendingGoogleCredential = null;
+      _pendingLinkingEmail = null;
+
+      final success = await _loadAndMigrateUserProfile(existingUserCred.user!);
+      _needsOrgRegistration = false;
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } on FirebaseAuthException catch (e) {
+      _errorMessage = e.message ?? 'Failed to authenticate and link account.';
+    } catch (e) {
+      _errorMessage = 'An unexpected error occurred during account linking.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  /// Send password reset link accepting Email or Mobile
+  Future<bool> sendPasswordResetForInput(String identifier) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    String targetEmail = identifier.trim();
+
+    if (!targetEmail.contains('@')) {
+      final resolved = await _resolveMobileToEmail(targetEmail);
+      if (resolved == null) {
+        _errorMessage =
+            'If an account exists with that number, a password reset email has been sent to the registered address.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+      targetEmail = resolved;
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: targetEmail);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _errorMessage =
+          'Failed to send password reset email. Please verify the email/mobile number.';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Helper method to load user profile, handle legacy migration, and set active organization
+  Future<bool> _loadAndMigrateUserProfile(User user) async {
+    final uid = user.uid;
+
+    final userDoc =
+        await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+    if (userDoc.exists) {
+      final userData = userDoc.data()!;
+      
+      // Legacy Migration Case B: Update missing email if user logged in via Firebase Auth with email
+      if ((userData['email'] == null || userData['email'].toString().isEmpty) &&
+          user.email != null) {
+        await FirebaseFirestore.instance.collection('users').doc(uid).update({
+          'email': user.email,
+          'updatedAt': DateTime.now().toIso8601String(),
+        });
+        userData['email'] = user.email;
+      }
+
+      await _migrateUserData(uid, userData);
+      _user = UserModel.fromJson(userData);
+
+      final orgId = userData['lastSelectedOrgId'] ??
+          userData['organization_id'] ??
+          userData['organizationId'];
+
+      if (orgId != null) {
+        final orgDoc = await FirebaseFirestore.instance
+            .collection('organizations')
+            .doc(orgId)
+            .get();
+        if (orgDoc.exists) {
+          _organization = OrganizationModel.fromJson(orgDoc.data()!);
+          await fetchSubscriptionConfig();
+          await loadSubscription(orgId);
+          await loadUserOrganizations(uid);
+
+          try {
+            FirebaseFirestore.instance.collection('activity_logs').add({
+              'organizationId': orgId,
+              'userId': uid,
+              'userName': _user?.name ?? 'User',
+              'userRole': _user?.role ?? 'member',
+              'action': 'Login',
+              'details': '${_user?.name} logged in successfully',
+              'timestamp': DateTime.now().toIso8601String(),
+            });
+          } catch (_) {}
+        }
+      }
+      return true;
+    } else {
+      // Create user doc if missing (Legacy Migration fallback)
+      final newUserDoc = {
+        'id': uid,
+        'email': user.email ?? '',
+        'mobile': user.phoneNumber ?? '',
+        'name': user.displayName ?? 'User',
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      await FirebaseFirestore.instance.collection('users').doc(uid).set(newUserDoc);
+      _user = UserModel.fromJson(newUserDoc);
+      return true;
+    }
+  }
+
   String? _verificationId;
 
-  // Request Mobile OTP login
+  /// Legacy Phone Auth OTP Request (Deprecated - retained for backward compatibility)
+  @Deprecated('Use Email/Mobile authentication')
   Future<bool> requestOtp(String mobile) async {
     _isLoading = true;
     _errorMessage = null;
@@ -502,36 +1082,25 @@ class AuthProvider with ChangeNotifier {
     }
 
     try {
+      print('[PHONE_AUTH] STEP 1: Calling FirebaseAuth.instance.verifyPhoneNumber(phoneNumber: $phone)');
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phone,
         verificationCompleted: (PhoneAuthCredential credential) async {
+          print('[PHONE_AUTH] CALLBACK: verificationCompleted triggered');
+          print('[PHONE_AUTH] credential.smsCode: ${credential.smsCode}');
+          print('[PHONE_AUTH] credential.verificationId: ${credential.verificationId}');
           try {
+            print('[PHONE_AUTH] Attempting signInWithCredential...');
             final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
             final uid = authResult.user!.uid;
+            print('[PHONE_AUTH] SUCCESS: Signed in with credential. uid: $uid');
             
-            final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-            if (userDoc.exists) {
-              final userData = userDoc.data()!;
-              _user = UserModel.fromJson(userData);
-              final orgId = userData['organization_id'] ?? userData['organizationId'];
-              if (orgId != null) {
-                final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
-                if (orgDoc.exists) {
-                  _organization = OrganizationModel.fromJson(orgDoc.data()!);
-                  await fetchSubscriptionConfig();
-                  await loadSubscription(orgId);
-                }
-              }
-              _isLoading = false;
-              notifyListeners();
-              if (!completer.isCompleted) completer.complete(true);
-            } else {
-              _errorMessage = 'User profile not found.';
-              _isLoading = false;
-              notifyListeners();
-              if (!completer.isCompleted) completer.complete(false);
-            }
+            final success = await _handlePostSignIn(authResult.user!, credential, phone);
+            _isLoading = false;
+            notifyListeners();
+            if (!completer.isCompleted) completer.complete(success);
           } catch (e) {
+            print('[PHONE_AUTH] ERROR during verificationCompleted sign-in: $e');
             _errorMessage = e.toString();
             _isLoading = false;
             notifyListeners();
@@ -539,18 +1108,27 @@ class AuthProvider with ChangeNotifier {
           }
         },
         verificationFailed: (FirebaseAuthException e) {
+          print('[PHONE_AUTH] CALLBACK: verificationFailed triggered');
+          print('[PHONE_AUTH] FirebaseAuthException code: ${e.code}');
+          print('[PHONE_AUTH] FirebaseAuthException message: ${e.message}');
+          print('[PHONE_AUTH] FirebaseAuthException email: ${e.email}');
+          print('[PHONE_AUTH] FirebaseAuthException credential: ${e.credential}');
           _errorMessage = e.message ?? 'Phone verification failed.';
           _isLoading = false;
           notifyListeners();
           if (!completer.isCompleted) completer.complete(false);
         },
         codeSent: (String verificationId, int? resendToken) {
+          print('[PHONE_AUTH] CALLBACK: codeSent triggered');
+          print('[PHONE_AUTH] verificationId: $verificationId');
+          print('[PHONE_AUTH] resendToken: $resendToken');
           _verificationId = verificationId;
           _isLoading = false;
           notifyListeners();
           if (!completer.isCompleted) completer.complete(true);
         },
         codeAutoRetrievalTimeout: (String verificationId) {
+          print('[PHONE_AUTH] CALLBACK: codeAutoRetrievalTimeout triggered. verificationId: $verificationId');
           _verificationId = verificationId;
         },
         timeout: const Duration(seconds: 60),
@@ -558,6 +1136,7 @@ class AuthProvider with ChangeNotifier {
       
       return completer.future;
     } catch (e) {
+      print('[PHONE_AUTH] ERROR calling verifyPhoneNumber: $e');
       _errorMessage = e.toString();
       _isLoading = false;
       notifyListeners();
@@ -565,9 +1144,97 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  // Verify Mobile OTP code
+  // Helper to handle post-sign-in logic (profile check & linking detection)
+  Future<bool> _handlePostSignIn(User user, PhoneAuthCredential credential, String mobile) async {
+    final uid = user.uid;
+    print('[PHONE_AUTH] Post-SignIn check for UID: $uid, Mobile: $mobile');
+
+    String cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
+    if (cleanMobile.startsWith('91') && cleanMobile.length > 10) {
+      cleanMobile = cleanMobile.substring(2);
+    }
+
+    // 1. Search for existing Owner/Admin user document with this mobile number
+    final querySnap = await FirebaseFirestore.instance
+        .collection('users')
+        .where('mobile', whereIn: [mobile, cleanMobile, '+91$cleanMobile', '+91 $cleanMobile'])
+        .get();
+
+    DocumentSnapshot? existingOwnerDoc;
+    for (var doc in querySnap.docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final role = data['role'];
+      if (role == 'admin' || role == 'owner') {
+        if (doc.id != uid) {
+          existingOwnerDoc = doc;
+          break;
+        }
+      }
+    }
+
+    if (existingOwnerDoc != null) {
+      final existingEmail = (existingOwnerDoc.data() as Map<String, dynamic>)['email'];
+      if (existingEmail != null && existingEmail.toString().isNotEmpty) {
+        print('[PHONE_AUTH] Found existing owner email account $existingEmail for phone $mobile. Triggering linking flow...');
+        _pendingLinkingEmail = existingEmail;
+        _pendingPhoneCredential = credential;
+        _errorMessage = 'linking-required:$existingEmail';
+        return false;
+      }
+    }
+
+    // 2. If no owner account needs to be linked, load profile by current UID
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      final userData = userDoc.data()!;
+      await _migrateUserData(uid, userData);
+      _user = UserModel.fromJson(userData);
+      final orgId = userData['organization_id'] ?? userData['organizationId'];
+      print('[PHONE_AUTH] User profile loaded. organizationId: $orgId');
+      if (orgId != null) {
+        final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+        if (orgDoc.exists) {
+          _organization = OrganizationModel.fromJson(orgDoc.data()!);
+          print('[PHONE_AUTH] Organization loaded successfully.');
+          await fetchSubscriptionConfig();
+          await loadSubscription(orgId);
+        } else {
+          print('[PHONE_AUTH] WARNING: Organization document not found.');
+        }
+      }
+      return true;
+    } else {
+      // No user profile exists. Check if this number has any pending invitation!
+      print('[PHONE_AUTH] No user profile found. Checking for invitations for: $cleanMobile');
+      try {
+        final invitesQuery = await FirebaseFirestore.instance
+            .collection('organization_invites')
+            .where('mobile', whereIn: [cleanMobile, '+91$cleanMobile', mobile])
+            .where('status', isEqualTo: 'pending')
+            .get();
+
+        if (invitesQuery.docs.isNotEmpty) {
+          print('[PHONE_AUTH] Found pending invitation(s) for $cleanMobile. Keeping session and redirecting to invite verification.');
+          _errorMessage = 'invite-verification-required:$cleanMobile';
+          return false; // Returns false, but sets the specific error message to trigger redirection
+        }
+      } catch (e) {
+        print('[PHONE_AUTH] Error querying invites: $e');
+      }
+
+      print('[PHONE_AUTH] No pending invitation found. Signing out.');
+      await FirebaseAuth.instance.signOut();
+      _errorMessage = 'User profile not found. Members must join via invitation first.';
+      return false;
+    }
+  }
+
+  /// Legacy Phone Auth OTP Verification (Deprecated - retained for backward compatibility)
+  @Deprecated('Use Email/Mobile authentication')
   Future<bool> verifyOtp(String mobile, String otp) async {
+    print('[PHONE_AUTH] STEP 2: verifyOtp called for mobile: $mobile, otp: $otp');
     if (_verificationId == null) {
+      print('[PHONE_AUTH] FAILURE: verificationId is null');
       _errorMessage = 'Verification session expired. Please request OTP again.';
       return false;
     }
@@ -577,17 +1244,80 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('[PHONE_AUTH] Creating PhoneAuthProvider credential for verificationId: $_verificationId, code: $otp');
       final credential = PhoneAuthProvider.credential(
         verificationId: _verificationId!,
         smsCode: otp,
       );
 
+      print('[PHONE_AUTH] Attempting signInWithCredential...');
       final authResult = await FirebaseAuth.instance.signInWithCredential(credential);
-      final uid = authResult.user!.uid;
+      print('[PHONE_AUTH] SUCCESS: Signed in. uid: ${authResult.user!.uid}');
 
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      final success = await _handlePostSignIn(authResult.user!, credential, mobile);
+      _isLoading = false;
+      notifyListeners();
+      return success;
+    } on FirebaseAuthException catch (e) {
+      print('[PHONE_AUTH] ERROR: FirebaseAuthException in verifyOtp');
+      print('[PHONE_AUTH] code: ${e.code}');
+      print('[PHONE_AUTH] message: ${e.message}');
+      if (e.code == 'invalid-verification-code') {
+        _errorMessage = 'Invalid verification code.';
+      } else {
+        _errorMessage = e.message ?? 'OTP verification failed.';
+      }
+    } catch (e) {
+      print('[PHONE_AUTH] ERROR: Unexpected error in verifyOtp: $e');
+      _errorMessage = 'An unexpected error occurred.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  // Link Phone to existing Email account and clean up temporary user
+  Future<bool> linkPhoneAccount(String password) async {
+    if (_pendingLinkingEmail == null || _pendingPhoneCredential == null) {
+      _errorMessage = 'No pending linking session found.';
+      return false;
+    }
+
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final email = _pendingLinkingEmail!;
+      final phoneCred = _pendingPhoneCredential!;
+
+      // 1. Delete temporary/orphan phone user to free up the phone number in Auth
+      final tempUser = FirebaseAuth.instance.currentUser;
+      if (tempUser != null) {
+        print('[PHONE_AUTH] Deleting temporary phone user account: ${tempUser.uid}');
+        await tempUser.delete();
+      }
+
+      // 2. Sign in to the original email account
+      print('[PHONE_AUTH] Signing into email account: $email');
+      final emailAuthResult = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final emailUser = emailAuthResult.user!;
+      final emailUid = emailUser.uid;
+
+      // 3. Link the phone credential to this email user
+      print('[PHONE_AUTH] Linking phone credential to email user: $emailUid');
+      await emailUser.linkWithCredential(phoneCred);
+
+      // 4. Load the profile and organization for the linked user
+      print('[PHONE_AUTH] Loading profile details for email user: $emailUid');
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(emailUid).get();
       if (userDoc.exists) {
         final userData = userDoc.data()!;
+        await _migrateUserData(emailUid, userData);
         _user = UserModel.fromJson(userData);
         final orgId = userData['organization_id'] ?? userData['organizationId'];
         if (orgId != null) {
@@ -598,25 +1328,38 @@ class AuthProvider with ChangeNotifier {
             await loadSubscription(orgId);
           }
         }
+
+        _pendingLinkingEmail = null;
+        _pendingPhoneCredential = null;
         _isLoading = false;
         notifyListeners();
         return true;
       } else {
-        _errorMessage = 'User profile not found.';
+        _errorMessage = 'User profile document not found.';
       }
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'invalid-verification-code') {
-        _errorMessage = 'Invalid verification code.';
+      print('[PHONE_AUTH] FirebaseAuthException during linking: ${e.code} - ${e.message}');
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        _errorMessage = 'Incorrect email or password.';
       } else {
-        _errorMessage = e.message ?? 'OTP verification failed.';
+        _errorMessage = e.message ?? 'Failed to link account.';
       }
     } catch (e) {
+      print('[PHONE_AUTH] Unexpected error during linking: $e');
       _errorMessage = 'An unexpected error occurred.';
     }
 
     _isLoading = false;
     notifyListeners();
     return false;
+  }
+
+  // Cancel pending link operation
+  void cancelPendingLinking() {
+    _pendingLinkingEmail = null;
+    _pendingPhoneCredential = null;
+    _errorMessage = null;
+    notifyListeners();
   }
 
   // Refresh organization details
@@ -630,6 +1373,7 @@ class AuthProvider with ChangeNotifier {
             .get();
         if (userDoc.exists) {
           final userData = userDoc.data()!;
+          await _migrateUserData(currentUser.uid, userData);
           _user = UserModel.fromJson(userData);
           final orgId =
               userData['organization_id'] ?? userData['organizationId'];
@@ -639,8 +1383,7 @@ class AuthProvider with ChangeNotifier {
                 .doc(orgId)
                 .get();
             if (orgDoc.exists) {
-              var orgData = orgDoc.data()!;
-              orgData = await _ensureOwnerFields(orgId, currentUser.uid, userData, orgData);
+              final orgData = orgDoc.data()!;
               _organization = OrganizationModel.fromJson(orgData);
               await fetchSubscriptionConfig();
               await loadSubscription(orgId);
@@ -731,12 +1474,22 @@ class AuthProvider with ChangeNotifier {
     }
 
     try {
+      scaffoldMessengerKey.currentState?.clearSnackBars();
+      cancelSubListener();
+      try {
+        await GoogleSignIn.instance.signOut();
+      } catch (e) {
+        debugPrint('Google SignOut error: $e');
+      }
       await FirebaseAuth.instance.signOut();
     } catch (e) {
       debugPrint('Logout failed: $e');
     }
     _user = null;
     _organization = null;
+    _subscription = null;
+    _activeRole = null;
+    _switchGeneration++;
     notifyListeners();
   }
 
@@ -798,9 +1551,41 @@ class AuthProvider with ChangeNotifier {
     return orgData;
   }
 
+  // Auto-User and Organization Migration Helper
+  Future<void> _migrateUserData(String uid, Map<String, dynamic> userData) async {
+    try {
+      final orgId = userData['organization_id'] ?? userData['organizationId'];
+      if (orgId != null) {
+        // 1. User document migration: ensure both organizationId and organization_id exist
+        if (userData['organizationId'] == null || userData['organization_id'] == null) {
+          debugPrint('[MIGRATION] Migrating user document for uid: $uid');
+          await FirebaseFirestore.instance.collection('users').doc(uid).update({
+            'organizationId': orgId,
+            'organization_id': orgId,
+          });
+        }
+        
+        // 2. Organization document migration: ensure owner fields are set
+        final orgDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
+        if (orgDoc.exists) {
+          final orgData = orgDoc.data()!;
+          if (orgData['ownerUid'] == null || orgData['ownerUid'].toString().trim().isEmpty) {
+            final role = userData['role'];
+            if (role == 'admin' || role == 'owner') {
+              debugPrint('[MIGRATION] Migrating organization document for org: $orgId');
+              await _ensureOwnerFields(orgId, uid, userData, orgData);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MIGRATION] Error migrating user/org data: $e');
+    }
+  }
+
   // Upload profile photo
   Future<bool> uploadProfilePhoto(List<int> photoBytes) async {
-    if (_user == null || _organization == null) return false;
+    if (_user == null) return false;
     _isLoading = true;
     notifyListeners();
 
@@ -823,27 +1608,44 @@ class AuthProvider with ChangeNotifier {
       final bytes256 = processedData.bytes256;
       final bytes128 = processedData.bytes128;
 
-      // 2. Parallel upload of all three files
+      String? url512;
+      String? url256;
+      String? url128;
+
+      // 2. Parallel upload of files with timeout fallback to Data URI
       final startUpload = stopwatch.elapsedMilliseconds;
-      final metadata = SettableMetadata(contentType: 'image/jpeg');
+      try {
+        final metadata = SettableMetadata(contentType: 'image/jpeg');
 
-      final ref512 = FirebaseStorage.instance.ref().child('users').child(uid).child('profile_photo.jpg');
-      final ref256 = FirebaseStorage.instance.ref().child('users').child(uid).child('profile_photo_256.jpg');
-      final ref128 = FirebaseStorage.instance.ref().child('users').child(uid).child('profile_photo_128.jpg');
+        final ref512 = FirebaseStorage.instance.ref().child('users').child(uid).child('profile_photo.jpg');
+        final ref256 = FirebaseStorage.instance.ref().child('users').child(uid).child('profile_photo_256.jpg');
+        final ref128 = FirebaseStorage.instance.ref().child('users').child(uid).child('profile_photo_128.jpg');
 
-      final uploadTasks = [
-        ref512.putData(bytes512, metadata).then((_) => ref512.getDownloadURL()),
-        ref256.putData(bytes256, metadata).then((_) => ref256.getDownloadURL()),
-        ref128.putData(bytes128, metadata).then((_) => ref128.getDownloadURL()),
-      ];
+        final uploadTasks = [
+          ref512.putData(bytes512, metadata).then((_) => ref512.getDownloadURL()),
+          ref256.putData(bytes256, metadata).then((_) => ref256.getDownloadURL()),
+          ref128.putData(bytes128, metadata).then((_) => ref128.getDownloadURL()),
+        ];
 
-      final urls = await Future.wait(uploadTasks);
-      final url512 = urls[0];
-      final url256 = urls[1];
-      final url128 = urls[2];
+        final urls = await Future.wait(uploadTasks).timeout(const Duration(seconds: 10));
+        url512 = urls[0];
+        url256 = urls[1];
+        url128 = urls[2];
+      } catch (e) {
+        debugPrint('[PROFILE_PHOTO] Storage upload failed or timed out: $e. Falling back to Data URI.');
+        final dataUri = 'data:image/jpeg;base64,${base64Encode(bytes128)}';
+        url512 = dataUri;
+        url256 = dataUri;
+        url128 = dataUri;
+      }
       final uploadTime = stopwatch.elapsedMilliseconds - startUpload;
 
-      // 3. Firestore update immediately after upload
+      // 3. Cache compressed images locally and AWAIT file write
+      await ImageProcessingService.cachePhotoLocally(uid, newVersion, bytes512, suffix: '');
+      await ImageProcessingService.cachePhotoLocally(uid, newVersion, bytes256, suffix: '_256');
+      await ImageProcessingService.cachePhotoLocally(uid, newVersion, bytes128, suffix: '_128');
+
+      // 4. Firestore update immediately after upload
       final startFirestore = stopwatch.elapsedMilliseconds;
       await FirebaseFirestore.instance
           .collection('users')
@@ -853,13 +1655,9 @@ class AuthProvider with ChangeNotifier {
         'profilePhotoUrl256': url256,
         'profilePhotoUrl128': url128,
         'profilePhotoVersion': newVersion,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
       final firestoreTime = stopwatch.elapsedMilliseconds - startFirestore;
-
-      // 4. Cache compressed images locally in background
-      ImageProcessingService.cachePhotoLocally(uid, newVersion, bytes512, suffix: '');
-      ImageProcessingService.cachePhotoLocally(uid, newVersion, bytes256, suffix: '_256');
-      ImageProcessingService.cachePhotoLocally(uid, newVersion, bytes128, suffix: '_128');
 
       final totalTime = stopwatch.elapsedMilliseconds;
 
@@ -888,7 +1686,7 @@ class AuthProvider with ChangeNotifier {
 
   // Delete profile photo
   Future<bool> deleteProfilePhoto() async {
-    if (_user == null || _organization == null) return false;
+    if (_user == null) return false;
     _isLoading = true;
     notifyListeners();
 
@@ -915,11 +1713,15 @@ class AuthProvider with ChangeNotifier {
         'profilePhotoUrl256': null,
         'profilePhotoUrl128': null,
         'profilePhotoVersion': newVersion,
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       await ImageProcessingService.clearLocalCache(uid);
 
-      await _logActivity('Profile Photo Deleted', 'Removed profile photo and thumbnails');
+      try {
+        await _logActivity('Profile Photo Deleted', 'Removed profile photo and thumbnails');
+      } catch (_) {}
+      
       await reloadProfile();
 
       _isLoading = false;

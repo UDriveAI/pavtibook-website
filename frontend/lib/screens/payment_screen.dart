@@ -40,7 +40,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             content: Text('Payment Confirmed. Receipt marked as PAID.')),
       );
 
-      navigator.pushReplacementNamed(
+      navigator.pushNamed(
         '/receipt-success',
         arguments: {
           'receipt': updatedReceipt,
@@ -128,10 +128,19 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final upiQrImageUrl = org?.upiQrImageUrl;
     final upiMerchantName = org?.upiMerchantName ?? org?.name ?? 'Organization';
     final upiId = org?.upiId ?? '';
-
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('UPI Payment QR'),
       ),
@@ -293,6 +302,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 }

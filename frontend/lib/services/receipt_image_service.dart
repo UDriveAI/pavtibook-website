@@ -3,28 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:image/image.dart' as img;
 import '../models/models.dart';
-
-class ImageCompressInput {
-  final int width;
-  final int height;
-  final Uint8List bytes;
-  ImageCompressInput(this.width, this.height, this.bytes);
-}
-
-// Top-level Isolate function to compress raw RGBA bytes to high-quality JPEG directly
-Uint8List _compressRawToJpgIsolate(ImageCompressInput input) {
-  final image = img.Image.fromBytes(
-    width: input.width,
-    height: input.height,
-    bytes: input.bytes.buffer,
-    numChannels: 4,
-    order: img.ChannelOrder.rgba,
-  );
-  final jpgBytes = img.encodeJpg(image, quality: 95);
-  return Uint8List.fromList(jpgBytes);
-}
 
 class ReceiptImageService {
   // Pre-cache all network images (logos, signatures, collector photos, watermarks, stamps)
@@ -121,7 +100,7 @@ class ReceiptImageService {
           throw Exception("Boundary size has not been laid out yet");
         }
 
-        if (boundary.debugNeedsPaint) {
+        if (kDebugMode && boundary.debugNeedsPaint) {
           throw Exception("Boundary needs paint/repaint");
         }
 
@@ -142,24 +121,17 @@ class ReceiptImageService {
     }
 
     // Capture boundary image representation.
-    // logicalSize (typically ~360px wide) * pixelRatio 3.0 = 1080px wide output.
+    // logicalSize (typically ~700px wide) * pixelRatio 3.0 = 2100px wide lossless output.
     final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-    final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
     if (byteData == null) {
-      throw Exception("Failed to convert captured image boundary to raw RGBA bytes");
+      throw Exception("Failed to convert captured image boundary to PNG bytes");
     }
 
-    final rawBytes = byteData.buffer.asUint8List();
-    
-    // Compress raw RGBA to 95% JPEG quality in background Isolate
-    final jpgBytes = await compute(
-      _compressRawToJpgIsolate,
-      ImageCompressInput(image.width, image.height, rawBytes),
-    );
-
+    final pngBytes = byteData.buffer.asUint8List();
     final elapsed = stopwatch.elapsedMilliseconds;
-    debugPrint('ReceiptImageService: Capture and compression completed successfully in ${elapsed}ms');
+    debugPrint('ReceiptImageService: Capture completed successfully (PNG format) in ${elapsed}ms');
 
-    return jpgBytes;
+    return pngBytes;
   }
 }

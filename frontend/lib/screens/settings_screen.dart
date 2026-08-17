@@ -848,7 +848,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       fontSize: 13,
                                       fontWeight: FontWeight.bold)),
                               subtitle: const Text(
-                                  'Manage President, Treasurer & Member (Sadasya) details',
+                                  'Manage President, Treasurer & Secretary details',
                                   style: TextStyle(fontSize: 10)),
                               trailing:
                                   const Icon(Icons.chevron_right, size: 20),
@@ -971,6 +971,25 @@ class _SettingsScreenState extends State<SettingsScreen>
                                 HapticFeedback.lightImpact();
                                 Navigator.pushNamed(
                                     context, '/settings/subscription-usage');
+                              },
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const Icon(Icons.receipt_outlined,
+                                  color: Color(0xFFF47C20)),
+                              title: const Text('Payment History',
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold)),
+                              subtitle: const Text(
+                                  'View invoices and transaction records',
+                                  style: TextStyle(fontSize: 10)),
+                              trailing:
+                                  const Icon(Icons.chevron_right, size: 20),
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.pushNamed(
+                                    context, '/settings/payment-history');
                               },
                             ),
                             const Divider(height: 1),

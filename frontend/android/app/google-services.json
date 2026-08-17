@@ -12,7 +12,36 @@
           "package_name": "com.pavtibook.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "780452591351-2aekhucqs5mfsek8l4v6h0b52nti2b71.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pavtibook.app",
+            "certificate_hash": "f9e60fb7b58dc48fb1880f7e19c38fab22104dd9"
+          }
+        },
+        {
+          "client_id": "780452591351-2jm12u3gfrd5e0bgv9tf56feaj15omrq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pavtibook.app",
+            "certificate_hash": "0d9ab7e91754c6d2d187d361e469ed89ae00ce0e"
+          }
+        },
+        {
+          "client_id": "780452591351-g4t9ravr4njuft1m9p3u45k4abn2om3e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.pavtibook.app",
+            "certificate_hash": "6aca919f60ba0d7ab556c4c74321b75fd24c3695"
+          }
+        },
+        {
+          "client_id": "780452591351-ligh78331iu5s341ehm75o2ucnnbf6iu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDT0rQhvD4D30MApVzvJS4VmHLm7rObw4c"
@@ -20,7 +49,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "780452591351-ligh78331iu5s341ehm75o2ucnnbf6iu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

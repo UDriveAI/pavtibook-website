@@ -149,7 +149,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final sub = auth.subscription;
-    if (sub != null && sub.receiptsUsed >= sub.receiptLimit) {
+    if (sub != null && sub.isReceiptLimitReached) {
       _showPremiumUpgradeDialog();
       return;
     }
@@ -229,7 +229,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
       if (_paymentMode == 'upi') {
         // Go to UPI QR payment screen
-        Navigator.pushReplacementNamed(
+        Navigator.pushNamed(
           context,
           '/payment',
           arguments: {
@@ -239,7 +239,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
         );
       } else {
         // Go directly to receipt success screen (Cash or Pending status)
-        Navigator.pushReplacementNamed(
+        Navigator.pushNamed(
           context,
           '/receipt-success',
           arguments: {
@@ -262,7 +262,17 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: const Text('New Donation Receipt'),
       ),
@@ -514,7 +524,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                           DropdownMenuItem(
                               value: 'Treasurer', child: Text('Treasurer')),
                           DropdownMenuItem(
-                              value: 'Member', child: Text('Member (Sadasya)')),
+                              value: 'Secretary', child: Text('Secretary')),
                         ],
                         validator: (val) => val == null || val.isEmpty
                             ? 'Please select who collected the payment'
@@ -590,6 +600,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 }

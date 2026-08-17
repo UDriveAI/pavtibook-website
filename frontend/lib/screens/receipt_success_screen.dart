@@ -17,6 +17,7 @@ import '../services/receipt_image_service.dart';
 import '../widgets/traditional_receipt_widget.dart';
 import '../services/subscription_permission_service.dart';
 import '../services/sharing_service.dart';
+import '../services/location_service.dart';
 
 class ReceiptSuccessScreen extends StatefulWidget {
   const ReceiptSuccessScreen({super.key});
@@ -840,13 +841,33 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
       );
     }
 
-    return Stack(
-      children: [
-        Scaffold(
-          appBar: AppBar(
-            title: const Text('Receipt Status'),
-            automaticallyImplyLeading: false,
-          ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else {
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      },
+      child: Stack(
+        children: [
+          Scaffold(
+            appBar: AppBar(
+              title: const Text('Receipt Status'),
+              automaticallyImplyLeading: false,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () {
+                  if (Navigator.canPop(context)) {
+                    Navigator.pop(context);
+                  } else {
+                    Navigator.pushReplacementNamed(context, '/dashboard');
+                  }
+                },
+              ),
+            ),
           body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -1137,7 +1158,8 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
             ),
           ),
       ],
-    );
+    ),
+  );
   }
 
   String _formatDate(DateTime date) {
@@ -1291,6 +1313,7 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
     );
 
     try {
+      debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Preparing receipt...');
       final auth = Provider.of<AuthProvider>(context, listen: false);
       final tempProvider = Provider.of<TemplateProvider>(context, listen: false);
       final orgName = receipt.organizationName ?? auth.organization?.name ?? 'PavtiBook';
@@ -1309,12 +1332,19 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
       String mimeType = '';
 
       if (format == 'image') {
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Generating JPG...');
         final jpgBytes = await ReceiptImageService.captureReceiptWidget(_receiptKey);
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] JPG generated successfully. Bytes size: ${jpgBytes.length}');
         final tempDir = await getTemporaryDirectory();
         filePath = '${tempDir.path}/receipt_${receipt.receiptNumber.replaceAll('/', '-')}.jpg';
-        await File(filePath).writeAsBytes(jpgBytes);
+        final file = File(filePath);
+        await file.writeAsBytes(jpgBytes);
+        final exists = await file.exists();
+        final size = await file.length();
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Does JPG file exist? $exists, size: $size bytes');
         mimeType = 'image/jpeg';
       } else {
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Generating PDF...');
         TemplateModel activeTemplate;
         if (tempProvider.templates.isNotEmpty) {
           activeTemplate = tempProvider.templates.firstWhere(
@@ -1347,10 +1377,15 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
         } catch (_) {}
 
         final pdfBytes = await SharingService.generateMinimalPdf(
+          receipt: receipt,
           templateType: activeTemplate.type,
           receiptNumber: receipt.receiptNumber,
           orgName: orgName,
           donorName: receipt.donorName ?? 'Anonymous',
+          donorAddress: receipt.donorAddress,
+          donorMobile: receipt.donorMobile,
+          donorId: receipt.donorId,
+          receiptTime: receipt.createdAt,
           amount: receipt.amount,
           purpose: receipt.purpose,
           date: dateStrPdf,
@@ -1358,8 +1393,19 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
           paymentStatus: receipt.paymentStatus,
           qrCodeValue: receipt.qrCodeValue,
           signatureLabel: activeTemplate.signatureLabel,
+          presidentSignatureUrl: auth.organization?.presidentSignatureUrl ?? activeTemplate.presidentSignatureUrl,
+          treasurerSignatureUrl: auth.organization?.treasurerSignatureUrl ?? activeTemplate.treasurerSignatureUrl,
+          secretarySignatureUrl: auth.organization?.secretarySignatureUrl ?? activeTemplate.secretarySignatureUrl,
+          presidentSignatureScale: activeTemplate.presidentSignatureScale,
+          treasurerSignatureScale: activeTemplate.treasurerSignatureScale,
+          secretarySignatureScale: activeTemplate.secretarySignatureScale,
+          presidentName: auth.organization?.presidentName,
+          treasurerName: auth.organization?.treasurerName,
+          secretaryName: auth.organization?.secretaryName,
+          orgAddress: LocationService.getCachedGpsAddress(auth.organization?.address),
+          customNote: activeTemplate.customNote,
           headerTextLocal: receipt.footerText ?? activeTemplate.headerTextLocal,
-          headerTextEn: activeTemplate.headerTextEn,
+          headerTextEn: activeTemplate.customSubtitleLocal ?? activeTemplate.headerTextEn,
           headerLogoUrl: receipt.headerLogoUrl ?? receipt.organizationLogoUrl,
           leftSideImageUrl: receipt.leftSideImageUrl ?? receipt.leftImageUrl,
           rightSideImageUrl: receipt.rightSideImageUrl ?? receipt.rightImageUrl,
@@ -1367,17 +1413,31 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
           signatureUrl: receipt.signatureUrl ?? receipt.collectorSignatureUrl,
           footerText: activeTemplate.footerTextEn,
           collectorName: receipt.collectorName,
-          brandPrimaryColorHex: activeTemplate.borderColor,
+          brandPrimaryColorHex: activeTemplate.primaryColor,
+          bgColorHex: activeTemplate.bgColor,
+          borderColorHex: activeTemplate.borderColor,
+          languageCode: Localizations.localeOf(context).languageCode,
+          watermarkOpacity: activeTemplate.watermarkOpacity,
+          logoScale: activeTemplate.logoScale,
+          stampScale: activeTemplate.stampScale,
+          customTextSizes: activeTemplate.customTextSizes,
         );
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] PDF generated successfully. Bytes size: ${pdfBytes.length}');
         final tempDir = await getTemporaryDirectory();
         filePath = '${tempDir.path}/receipt_${receipt.receiptNumber.replaceAll('/', '-')}.pdf';
-        await File(filePath).writeAsBytes(pdfBytes);
+        final file = File(filePath);
+        await file.writeAsBytes(pdfBytes);
+        final exists = await file.exists();
+        final size = await file.length();
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Does PDF file exist? $exists, size: $size bytes');
         mimeType = 'application/pdf';
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] PDF Path: $filePath');
       }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
+      debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Launching WhatsApp share...');
       final launched = await SharingService.shareViaWhatsAppWithFile(
         filePath: filePath,
         mimeType: mimeType,
@@ -1386,19 +1446,22 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
       );
 
       if (!launched) {
+        debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Share Failed');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Unable to open WhatsApp.')),
+            const SnackBar(content: Text('Unable to share receipt. Please try again.')),
           );
         }
         return;
       }
-    } catch (e) {
-      debugPrint('_shareViaWhatsAppDirect error: $e');
+      debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Share Success');
+    } catch (e, stack) {
+      debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Share Failed with error: $e');
+      debugPrint('receipt_success_screen: [_shareViaWhatsAppDirect] Stacktrace:\n$stack');
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error preparing receipt: $e')),
+          SnackBar(content: Text('Unable to share receipt. Please try again.')),
         );
       }
     }
@@ -1472,38 +1535,54 @@ class _ReceiptSuccessScreenState extends State<ReceiptSuccessScreen> {
         }
       } catch (_) {}
 
-      final savedPath = await SharingService.savePdfLocally(
-        templateType: activeTemplate.type,
-        receiptNumber: receipt.receiptNumber,
-        orgName: receipt.organizationName ??
-            auth.organization?.name ??
-            'PavtiBook',
-        donorName: receipt.donorName ?? 'Guest Donor',
-        amount: receipt.amount,
-        purpose: receipt.purpose,
-        date: dateStr,
-        paymentMode: receipt.paymentMode,
-        paymentStatus: receipt.paymentStatus,
-        qrCodeValue: receipt.qrCodeValue,
-        signatureLabel:
-            receipt.collectorRole ?? activeTemplate.signatureLabel,
-        headerTextLocal: activeTemplate.headerTextLocal,
-        headerTextEn: activeTemplate.headerTextEn,
-        headerLogoUrl:
-            receipt.headerLogoUrl ?? receipt.organizationLogoUrl,
-        leftSideImageUrl:
-            receipt.leftSideImageUrl ?? receipt.leftImageUrl,
-        rightSideImageUrl:
-            receipt.rightSideImageUrl ?? receipt.rightImageUrl,
-        customStampUrl: receipt.customStampUrl ?? receipt.stampUrl,
-        signatureUrl:
-            receipt.signatureUrl ?? receipt.collectorSignatureUrl,
-        footerText: receipt.footerText,
-        collectorName: receipt.collectorName,
-        receiptThemeId: receipt.receiptThemeId ??
-            auth.organization?.receiptThemeId,
-        brandPrimaryColorHex: activeTemplate.borderColor,
-      );
+        Uint8List? capturedImageBytes;
+        try {
+          capturedImageBytes = await ReceiptImageService.captureReceiptWidget(_receiptKey);
+        } catch (e) {
+          debugPrint('receipt_success_screen: captureReceiptWidget failed for local PDF: $e');
+        }
+
+        final savedPath = await SharingService.savePdfLocally(
+          receipt: receipt,
+          templateType: activeTemplate.type,
+          receiptNumber: receipt.receiptNumber,
+          orgName: receipt.organizationName ?? auth.organization?.name ?? 'PavtiBook',
+          donorName: receipt.donorName ?? 'Guest Donor',
+          donorAddress: receipt.donorAddress,
+          donorMobile: receipt.donorMobile,
+          donorId: receipt.donorId,
+          receiptTime: receipt.createdAt,
+          amount: receipt.amount,
+          purpose: receipt.purpose,
+          date: dateStr,
+          paymentMode: receipt.paymentMode,
+          paymentStatus: receipt.paymentStatus,
+          qrCodeValue: receipt.qrCodeValue,
+          signatureLabel: receipt.collectorRole ?? activeTemplate.signatureLabel,
+          presidentSignatureUrl: auth.organization?.presidentSignatureUrl ?? activeTemplate.presidentSignatureUrl,
+          treasurerSignatureUrl: auth.organization?.treasurerSignatureUrl ?? activeTemplate.treasurerSignatureUrl,
+          secretarySignatureUrl: auth.organization?.secretarySignatureUrl ?? activeTemplate.secretarySignatureUrl,
+          presidentSignatureScale: activeTemplate.presidentSignatureScale,
+          treasurerSignatureScale: activeTemplate.treasurerSignatureScale,
+          secretarySignatureScale: activeTemplate.secretarySignatureScale,
+          presidentName: auth.organization?.presidentName,
+          treasurerName: auth.organization?.treasurerName,
+          secretaryName: auth.organization?.secretaryName,
+          orgAddress: LocationService.getCachedGpsAddress(auth.organization?.address),
+          customNote: activeTemplate.customNote,
+          headerTextLocal: activeTemplate.headerTextLocal,
+          headerTextEn: activeTemplate.headerTextEn,
+          headerLogoUrl: receipt.headerLogoUrl ?? receipt.organizationLogoUrl,
+          leftSideImageUrl: receipt.leftSideImageUrl ?? receipt.leftImageUrl,
+          rightSideImageUrl: receipt.rightSideImageUrl ?? receipt.rightImageUrl,
+          customStampUrl: receipt.customStampUrl ?? receipt.stampUrl,
+          signatureUrl: receipt.signatureUrl ?? receipt.collectorSignatureUrl,
+          footerText: receipt.footerText,
+          collectorName: receipt.collectorName,
+          receiptThemeId: receipt.receiptThemeId ?? auth.organization?.receiptThemeId,
+          brandPrimaryColorHex: activeTemplate.primaryColor,
+          capturedReceiptImage: capturedImageBytes,
+        );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();

@@ -30,11 +30,119 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       Navigator.pushNamedAndRemoveUntil(
           context, '/dashboard', (route) => false);
     } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(auth.errorMessage ?? 'OTP verification failed.')),
-      );
+      final errMsg = auth.errorMessage ?? '';
+      if (errMsg.startsWith('linking-required:')) {
+        final email = errMsg.substring('linking-required:'.length);
+        _showLinkingPasswordDialog(context, auth, email);
+      } else if (errMsg.startsWith('invite-verification-required:')) {
+        final inviteMobile = errMsg.substring('invite-verification-required:'.length);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification successful. Please enter your invite code to join.'),
+            backgroundColor: Colors.blue,
+          ),
+        );
+        Navigator.pushReplacementNamed(
+          context,
+          '/join-organization',
+          arguments: inviteMobile,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(errMsg.isEmpty ? 'OTP verification failed.' : errMsg)),
+        );
+      }
     }
+  }
+
+  void _showLinkingPasswordDialog(BuildContext context, AuthProvider auth, String email) {
+    final passwordController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool obscureText = true;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: const Color(0xFFFFF6E8),
+              title: const Text(
+                'Link Phone to Account',
+                style: TextStyle(color: Color(0xFF8B1E2D), fontWeight: FontWeight.bold),
+              ),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'This phone number is registered under email: $email.\n\nEnter your password to link them and sign in.',
+                      style: const TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: passwordController,
+                      obscureText: obscureText,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscureText ? Icons.visibility : Icons.visibility_off),
+                          onPressed: () => setState(() => obscureText = !obscureText),
+                        ),
+                      ),
+                      validator: (val) => val == null || val.length < 6 ? 'Password too short' : null,
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    auth.cancelPendingLinking();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B1E2D),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    
+                    final scaffoldMessenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(context);
+                    
+                    final success = await auth.linkPhoneAccount(passwordController.text.trim());
+                    if (success) {
+                      navigator.pop(); // Close dialog
+                      navigator.pushNamedAndRemoveUntil('/dashboard', (route) => false);
+                    } else {
+                      scaffoldMessenger.showSnackBar(
+                        SnackBar(content: Text(auth.errorMessage ?? 'Linking failed.')),
+                      );
+                    }
+                  },
+                  child: auth.isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Link & Sign In'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override

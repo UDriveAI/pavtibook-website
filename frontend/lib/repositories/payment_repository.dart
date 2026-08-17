@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:http/http.dart' as http;
@@ -112,6 +113,7 @@ class PaymentRepository {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      debugPrint('[PURCHASE_FLOW] [STEP 3 FAILED] User is null. Not authenticated.');
       throw Exception('User is not authenticated.');
     }
     final idToken = await user.getIdToken();
@@ -119,36 +121,58 @@ class PaymentRepository {
     final url =
         'https://$_region-$projectId.cloudfunctions.net/verifyGooglePlayPurchase';
 
-    final response = await http
-        .post(
-          Uri.parse(url),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $idToken',
-          },
-          body: jsonEncode({
-            'data': {
-              'purchaseToken': purchaseToken,
-              'productId': productId,
-              'orgId': orgId,
-              'planName': planName,
-              'operatorName': operatorName,
-              'oldPlan': oldPlan,
-            }
-          }),
-        )
-        .timeout(const Duration(seconds: 25));
+    debugPrint('[PURCHASE_FLOW] [STEP 3] Calling verifyPurchase Cloud Function:');
+    debugPrint('  URL: $url');
+
+    final Map<String, dynamic> requestBody = {
+      'data': {
+        'purchaseToken': purchaseToken,
+        'productId': productId,
+        'orgId': orgId,
+        'planName': planName,
+        'operatorName': operatorName,
+        'oldPlan': oldPlan,
+      }
+    };
+    debugPrint('  Request Body: ${jsonEncode(requestBody)}');
+
+    http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $idToken',
+            },
+            body: jsonEncode(requestBody),
+          )
+          .timeout(const Duration(seconds: 25));
+    } catch (e, stack) {
+      debugPrint('[PURCHASE_FLOW] [STEP 3 FAILED] Cloud Function network request failed:');
+      debugPrint('  Exception Type: ${e.runtimeType}');
+      debugPrint('  Exception Details: $e');
+      debugPrint('  Stacktrace:\n$stack');
+      rethrow;
+    }
+
+    debugPrint('[PURCHASE_FLOW] [STEP 3 RESPONSE] Cloud Function responded:');
+    debugPrint('  HTTP Status: ${response.statusCode}');
+    debugPrint('  Response Body: ${response.body}');
 
     if (response.statusCode != 200) {
+      debugPrint('[PURCHASE_FLOW] [STEP 3 FAILED] Server returned non-200 response.');
       throw Exception(
           'Verification failed: Server returned status code ${response.statusCode}\n${response.body}');
     }
 
     final responseBody = jsonDecode(response.body);
     if (responseBody == null || responseBody['result'] == null) {
+      debugPrint('[PURCHASE_FLOW] [STEP 3 FAILED] Invalid JSON structure in response.');
       throw Exception('Verification failed: Invalid server response.');
     }
 
+    debugPrint('[PURCHASE_FLOW] [STEP 3 SUCCESS] Cloud Function parsed response successfully.');
     return Map<String, dynamic>.from(responseBody['result']);
   }
 }
