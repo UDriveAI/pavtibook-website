@@ -23,6 +23,8 @@ export default async function Page({ params }: Props) {
   interface VerificationResult {
     isValid: boolean;
     receiptNumber?: string;
+    donorName?: string;
+    donorMobile?: string;
     amount?: number;
     purpose?: string;
     paymentMode?: string;

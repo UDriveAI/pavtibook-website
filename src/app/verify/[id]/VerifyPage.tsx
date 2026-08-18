@@ -3,6 +3,8 @@
 interface VerificationResult {
   isValid: boolean;
   receiptNumber?: string;
+  donorName?: string;
+  donorMobile?: string;
   amount?: number;
   purpose?: string;
   paymentMode?: string;
@@ -289,7 +291,7 @@ export default function VerifyPage({ token, result }: Props) {
             {/* Receipt Details */}
             <div>
               <DetailRow label="Receipt No." value={result.receiptNumber ?? "—"} />
-              <DetailRow label="Donor" value={"—"} />
+              <DetailRow label="Donor" value={result.donorName ?? "—"} />
               <DetailRow label="Purpose" value={result.purpose ?? "—"} />
               <DetailRow
                 label="Payment"
