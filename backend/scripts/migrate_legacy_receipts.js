@@ -287,6 +287,10 @@ async function runMigration(options = { execute: false }) {
             ? item.paymentStatus.toLowerCase()
             : 'paid';
 
+          if (item.donorName) {
+            await client.query('UPDATE donors SET name = $1 WHERE id = $2', [item.donorName, donorId]);
+          }
+
           await client.query(`
             UPDATE receipts 
             SET amount = $1,
@@ -294,15 +298,17 @@ async function runMigration(options = { execute: false }) {
                 payment_mode = $3,
                 payment_status = $4,
                 qr_code_value = $5,
-                created_at = $6,
-                updated_at = $6
-            WHERE id = $7
+                donor_id = $6,
+                created_at = $7,
+                updated_at = $7
+            WHERE id = $8
           `, [
             Number(item.amount),
             item.purpose || 'General Donation (देणगी)',
             paymentMode,
             paymentStatus,
             qrToken,
+            donorId,
             createdAtDate,
             existingRow.id
           ]);
