@@ -2203,8 +2203,8 @@
       "createdBy": null,
       "createdByName": null,
       "qrCodeValue": "",
-      "classification": "UNIQUE_PRODUCTION",
-      "migrationAction": "MIGRATE",
+      "classification": "EXCLUDED_DUPLICATE_JUNE",
+      "migrationAction": "ARCHIVE_ONLY",
       "targetQrCodeValue": "legacy_PB-2026-000050_WnIOMZ8yQBHO9JqGXk06"
     },
     {
@@ -3442,6 +3442,24 @@
       "classification": "AUTHORITATIVE_PRODUCTION_DUPLICATE",
       "migrationAction": "MIGRATE",
       "targetQrCodeValue": "legacy_PB-2026-000047_JWKjaLy5bdqP47fLTYGO"
+    },
+    {
+      "firestoreDocId": "manual_aug_PB-2026-000050",
+      "organizationId": "G6Bwjna0WrPctK1Mo6jB",
+      "organizationName": "Pranay Bhosale",
+      "receiptNumber": "PB-2026-000050",
+      "donorName": "Pranay Asha",
+      "donorMobile": "8097041571",
+      "amount": 44,
+      "paymentMode": "cash",
+      "paymentStatus": "paid",
+      "createdAt": "2026-08-18T23:30:00.000000",
+      "createdBy": "tEm4JHuAJOUroSCB1W2vS5KfXeh2",
+      "createdByName": "Pranay Bhosale",
+      "qrCodeValue": "",
+      "classification": "AUTHORITATIVE_PRODUCTION_DUPLICATE",
+      "migrationAction": "MIGRATE",
+      "targetQrCodeValue": "legacy_PB-2026-000050_manual_aug"
     }
   ]
 }
