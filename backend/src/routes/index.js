@@ -19,6 +19,7 @@ router.use('/receipts', receiptRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/public', publicRoutes);
+router.use('/internal', require('./internal.routes'));
 
 // DEFERRED — Version 2
 // router.use('/collectors', collectorRoutes);   // Collector Management → V2
