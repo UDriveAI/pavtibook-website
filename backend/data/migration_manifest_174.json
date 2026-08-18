@@ -1,10 +1,10 @@
 {
   "summary": {
-    "totalSourceDocuments": 174,
-    "uniqueProduction": 91,
-    "augustAuthoritativeDuplicates": 40,
+    "totalSourceDocuments": 175,
+    "uniqueProduction": 90,
+    "augustAuthoritativeDuplicates": 41,
     "totalMigrationCandidates": 131,
-    "juneExcludedDuplicates": 40,
+    "juneExcludedDuplicates": 41,
     "testOrgExcluded": 3
   },
   "manifest": [
@@ -2835,9 +2835,10 @@
       "createdBy": null,
       "createdByName": null,
       "qrCodeValue": "",
-      "classification": "UNIQUE_PRODUCTION",
-      "migrationAction": "MIGRATE",
-      "targetQrCodeValue": "legacy_PB-2026-000045_hh30RWsoTzUNAtNxfAru"
+      "classification": "EXCLUDED_DUPLICATE_JUNE",
+      "migrationAction": "ARCHIVE_ONLY",
+      "targetQrCodeValue": null,
+      "notes": "Superseded by August production receipt oTdiq24xRr8ekAkHvGR5"
     },
     {
       "firestoreDocId": "hkvo9VZkQLvjIvi2KkaC",
@@ -3393,6 +3394,26 @@
       "classification": "UNIQUE_PRODUCTION",
       "migrationAction": "MIGRATE",
       "targetQrCodeValue": "legacy_PB-2026-000079_yhHyLcoPUK5TwAALEtGq"
+    },
+    {
+      "firestoreDocId": "oTdiq24xRr8ekAkHvGR5",
+      "organizationId": "G6Bwjna0WrPctK1Mo6jB",
+      "organizationName": "Pranay Bhosale",
+      "receiptNumber": "PB-2026-000045",
+      "donorName": "Pranay Sanjeev Bhosale",
+      "donorMobile": "8097041571",
+      "donorAddress": "",
+      "amount": 123,
+      "paymentMode": "cash",
+      "paymentStatus": "paid",
+      "createdAt": "2026-08-18T22:19:29.838207",
+      "createdBy": "tEm4JHuAJOUroSCB1W2vS5KfXeh2",
+      "createdByName": "Pranay Bhosale",
+      "qrCodeValue": "",
+      "classification": "AUTHORITATIVE_PRODUCTION_DUPLICATE",
+      "migrationAction": "MIGRATE",
+      "targetQrCodeValue": "legacy_PB-2026-000045_oTdiq24xRr8ekAkHvGR5",
+      "notes": "Authoritative active receipt for receiptNumber PB-2026-000045"
     }
   ]
 }
