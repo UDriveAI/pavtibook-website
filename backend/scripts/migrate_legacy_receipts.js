@@ -142,6 +142,17 @@ function generateDeterministicToken(receiptNumber, docId) {
   return `legacy_${receiptNumber}_${docId}`;
 }
 
+function parseLegacyCreatedAt(dateStr) {
+  if (!dateStr) return new Date();
+  if (typeof dateStr === 'string') {
+    const trimmed = dateStr.trim();
+    if (!trimmed.includes('Z') && !trimmed.includes('+') && !trimmed.slice(10).includes('-')) {
+      return new Date(trimmed + '+05:30');
+    }
+  }
+  return new Date(dateStr);
+}
+
 async function runMigration(options = { execute: false }) {
   const isDryRun = !options.execute;
   const manifestPath = path.join(__dirname, '../data/migration_manifest_174.json');
@@ -279,7 +290,7 @@ async function runMigration(options = { execute: false }) {
 
         if (receiptCheck.rows.length > 0) {
           const existingRow = receiptCheck.rows[0];
-          const createdAtDate = item.createdAt ? new Date(item.createdAt) : new Date();
+          const createdAtDate = parseLegacyCreatedAt(item.createdAt);
           const paymentMode = ['cash', 'upi', 'pending'].includes((item.paymentMode || '').toLowerCase())
             ? item.paymentMode.toLowerCase()
             : 'cash';
@@ -327,7 +338,7 @@ async function runMigration(options = { execute: false }) {
           RETURNING id;
         `;
 
-        const createdAtDate = item.createdAt ? new Date(item.createdAt) : new Date();
+        const createdAtDate = parseLegacyCreatedAt(item.createdAt);
         const paymentMode = ['cash', 'upi', 'pending'].includes((item.paymentMode || '').toLowerCase())
           ? item.paymentMode.toLowerCase()
           : 'cash';
