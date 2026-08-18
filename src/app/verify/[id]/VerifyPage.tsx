@@ -26,6 +26,7 @@ function formatDate(dateStr?: string): string {
   if (!dateStr) return "—";
   try {
     return new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
       day: "2-digit",
       month: "long",
       year: "numeric",
