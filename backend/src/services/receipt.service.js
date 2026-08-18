@@ -48,23 +48,24 @@ class ReceiptService {
         }
       }
 
-      // 1. Check or Create Donor
+      // 1. Check or Create Donor (Strict name + mobile preservation)
       let donorId;
-      const existingDonor = await donorRepo.findByMobile(client, body.donorMobile, orgId);
+      const existingDonor = await donorRepo.findByNameAndMobile(client, body.donorName, body.donorMobile, orgId);
       if (existingDonor) {
         donorId = existingDonor.id;
-        const updateQuery = `
-          UPDATE donors
-          SET name = $1, email = $2, address = $3, updated_at = CURRENT_TIMESTAMP
-          WHERE id = $4 AND organization_id = $5 AND deleted_at IS NULL
-        `;
-        await client.query(updateQuery, [
-          body.donorName,
-          body.donorEmail || null,
-          body.donorAddress || null,
-          donorId,
-          orgId,
-        ]);
+        if (body.donorEmail || body.donorAddress) {
+          const updateQuery = `
+            UPDATE donors
+            SET email = COALESCE($1, email), address = COALESCE($2, address), updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3 AND organization_id = $4 AND deleted_at IS NULL
+          `;
+          await client.query(updateQuery, [
+            body.donorEmail || null,
+            body.donorAddress || null,
+            donorId,
+            orgId,
+          ]);
+        }
       } else {
         donorId = uuidv4();
         await donorRepo.create(client, {

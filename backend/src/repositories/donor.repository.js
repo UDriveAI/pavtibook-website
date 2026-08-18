@@ -64,6 +64,16 @@ class DonorRepository {
     return res.rows;
   }
 
+  async findByNameAndMobile(client, name, mobile, orgId) {
+    const query = `
+      SELECT id, name, email, address FROM donors 
+      WHERE LOWER(TRIM(name)) = LOWER(TRIM($1)) AND mobile = $2 AND organization_id = $3 AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    const res = await client.query(query, [name, mobile, orgId]);
+    return res.rows[0] || null;
+  }
+
   async findByMobile(client, mobile, orgId) {
     const query = `
       SELECT id, name, email, address FROM donors 

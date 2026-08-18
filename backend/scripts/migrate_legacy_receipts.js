@@ -254,12 +254,13 @@ async function runMigration(options = { execute: false }) {
       // 3. Process candidate receipts
       const candidates = orgCandidatesMap[orgId];
       for (const item of candidates) {
-        // A. Resolve Donor by (organization_id, mobile)
+        // A. Resolve Donor by (organization_id, mobile, donorName)
         let donorId = null;
         const donorMobile = item.donorMobile || '0000000000';
+        const donorName = (item.donorName || 'Donor').trim();
         const donorCheck = await client.query(
-          'SELECT id FROM donors WHERE organization_id = $1 AND mobile = $2 AND deleted_at IS NULL',
-          [pgOrgId, donorMobile]
+          'SELECT id FROM donors WHERE organization_id = $1 AND mobile = $2 AND LOWER(TRIM(name)) = LOWER(TRIM($3)) AND deleted_at IS NULL LIMIT 1',
+          [pgOrgId, donorMobile, donorName]
         );
 
         if (donorCheck.rows.length > 0) {
@@ -273,7 +274,7 @@ async function runMigration(options = { execute: false }) {
             RETURNING id;
           `;
           const resDonor = await client.query(insertDonor, [
-            newDonorId, pgOrgId, item.donorName || 'Donor', donorMobile, item.donorAddress || '', adminUserId
+            newDonorId, pgOrgId, donorName, donorMobile, item.donorAddress || '', adminUserId
           ]);
           donorId = resDonor.rows[0].id;
           report.donorsCreated++;
@@ -297,10 +298,6 @@ async function runMigration(options = { execute: false }) {
           const paymentStatus = ['paid', 'pending', 'cancelled'].includes((item.paymentStatus || '').toLowerCase())
             ? item.paymentStatus.toLowerCase()
             : 'paid';
-
-          if (item.donorName) {
-            await client.query('UPDATE donors SET name = $1 WHERE id = $2', [item.donorName, donorId]);
-          }
 
           await client.query(`
             UPDATE receipts 
