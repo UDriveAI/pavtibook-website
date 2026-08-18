@@ -251,6 +251,10 @@ async function runMigration(options = { execute: false }) {
         adminUserId = resUser.rows[0].id;
       }
 
+      // Ensure donors index allows multiple distinct names per mobile
+      await client.query('DROP INDEX IF EXISTS idx_donors_mobile_org_active');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_donors_mobile_org ON donors(organization_id, mobile) WHERE (deleted_at IS NULL)');
+
       // 3. Process candidate receipts
       const candidates = orgCandidatesMap[orgId];
       for (const item of candidates) {

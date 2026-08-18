@@ -404,7 +404,7 @@ CREATE INDEX idx_online_donations_org ON online_donations(organization_id) WHERE
 -- C. UNIQUE TENANT-SPECIFIC SEQUENCE CONSTRAINT
 CREATE UNIQUE INDEX idx_receipts_num_org_active ON receipts(organization_id, receipt_number) WHERE (deleted_at IS NULL);
 CREATE UNIQUE INDEX idx_receipts_qr_active ON receipts(qr_code_value) WHERE (deleted_at IS NULL);
-CREATE UNIQUE INDEX idx_donors_mobile_org_active ON donors(organization_id, mobile) WHERE (deleted_at IS NULL);
+CREATE INDEX idx_donors_mobile_org_active ON donors(organization_id, mobile) WHERE (deleted_at IS NULL);
 
 -- D. TEXT SEARCH INDEXES (Trigram indices for case-insensitive matching name/mobile)
 CREATE INDEX idx_donors_name_trgm ON donors USING gin (name gin_trgm_ops) WHERE (deleted_at IS NULL);
