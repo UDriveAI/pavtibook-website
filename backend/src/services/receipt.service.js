@@ -240,7 +240,7 @@ class ReceiptService {
           orgName,
           amount: receipt.amount,
           receiptNumber: receipt.receipt_number,
-          downloadUrl: `https://pavtibook.in/verify/${receipt.qr_code_value}`,
+          downloadUrl: `https://pavtibook.online/verify/${receipt.qr_code_value}`,
         },
         handler: channel === 'whatsapp'
           ? notificationQueue.handlers.whatsapp
@@ -275,6 +275,8 @@ class ReceiptService {
     return {
       isValid: true,
       receiptNumber: info.receipt_number,
+      donorName: info.donor_name || null,
+      donorMobile: info.donor_mobile || null,
       amount: parseFloat(info.amount),
       purpose: info.purpose,
       paymentMode: info.payment_mode,

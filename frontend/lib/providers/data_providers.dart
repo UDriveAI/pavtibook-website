@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
+import '../services/api_service.dart';
 
 // ==========================================
 // 1. DASHBOARD PROVIDER
@@ -65,8 +67,6 @@ class DashboardProvider with ChangeNotifier {
     _receiptsSubscription = FirebaseFirestore.instance
         .collection('receipts')
         .where('organizationId', isEqualTo: orgId)
-        .orderBy('createdAt', descending: true)
-        .limit(50)
         .snapshots()
         .listen((receiptsSnapshot) async {
       if (generation != _currentGeneration) {
@@ -80,13 +80,19 @@ class DashboardProvider with ChangeNotifier {
       double yearly = 0;
       double cash = 0;
       double upi = 0;
+      double bank = 0;
+      double cheque = 0;
+      double other = 0;
       double pending = 0;
       int totalReceipts = 0;
 
       final now = DateTime.now();
       final startOfToday = DateTime(now.year, now.month, now.day);
+      final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
       final startOfMonth = DateTime(now.year, now.month, 1);
+      final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
       final startOfYear = DateTime(now.year, 1, 1);
+      final startOfNextYear = DateTime(now.year + 1, 1, 1);
 
       final Map<String, double> weekdayAmounts = {
         'Mon': 0.0,
@@ -108,21 +114,30 @@ class DashboardProvider with ChangeNotifier {
       for (var doc in receiptsSnapshot.docs) {
         final data = doc.data();
         final amount = (data['amount'] is num) ? (data['amount'] as num).toDouble() : 0.0;
-        final status = data['paymentStatus'] ?? data['payment_status'] ?? '';
-        final mode = data['paymentMode'] ?? data['payment_mode'] ?? '';
+        final status = normalizePaymentStatus(data['paymentStatus'] ?? data['payment_status'] ?? data['status']);
+        final mode = normalizePaymentMode(data['paymentMode'] ?? data['payment_mode'] ?? data['paymentMethod']);
         final createdAtStr = data['createdAt'] ?? data['created_at'];
         final createdBy = data['createdBy'] ?? data['collectorId'] ?? '';
+        final collectorId = data['collectorId'] ?? '';
 
         if (status == 'cancelled') continue;
 
         // Member dashboard only aggregates member's own receipts
-        if (!isOwnerRole && createdBy != uid) continue;
+        if (!isOwnerRole && createdBy != uid && collectorId != uid) continue;
+
+        bool isToday = false;
+        bool isMonth = false;
+        bool isYear = false;
 
         if (createdAtStr != null) {
           final date = DateTime.tryParse(createdAtStr);
           if (date != null) {
-            if (date.isAfter(startOfToday)) todayReceipts++;
-            if (date.isAfter(startOfMonth)) monthReceipts++;
+            isToday = !date.isBefore(startOfToday) && date.isBefore(startOfTomorrow);
+            isMonth = !date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth);
+            isYear = !date.isBefore(startOfYear) && date.isBefore(startOfNextYear);
+
+            if (isToday) todayReceipts++;
+            if (isMonth) monthReceipts++;
           }
         }
 
@@ -135,14 +150,20 @@ class DashboardProvider with ChangeNotifier {
             cash += amount;
           } else if (mode == 'upi') {
             upi += amount;
+          } else if (mode == 'bank') {
+            bank += amount;
+          } else if (mode == 'cheque') {
+            cheque += amount;
+          } else {
+            other += amount;
           }
 
           if (createdAtStr != null) {
             final date = DateTime.tryParse(createdAtStr);
             if (date != null) {
-              if (date.isAfter(startOfToday)) today += amount;
-              if (date.isAfter(startOfMonth)) monthly += amount;
-              if (date.isAfter(startOfYear)) yearly += amount;
+              if (isToday) today += amount;
+              if (isMonth) monthly += amount;
+              if (isYear) yearly += amount;
 
               final diffDays = now.difference(date).inDays;
               if (diffDays < 7) {
@@ -233,6 +254,9 @@ class DashboardProvider with ChangeNotifier {
         totalDonors: totalDonors,
         cashCollection: cash,
         upiCollection: upi,
+        bankCollection: bank,
+        chequeCollection: cheque,
+        otherCollection: other,
         pendingCollection: pending,
         dailyChart: weeklyTrend,
         monthlyChart: [],
@@ -317,13 +341,19 @@ class DashboardProvider with ChangeNotifier {
       double yearly = 0;
       double cash = 0;
       double upi = 0;
+      double bank = 0;
+      double cheque = 0;
+      double other = 0;
       double pending = 0;
       int totalReceipts = 0;
 
       final now = DateTime.now();
       final startOfToday = DateTime(now.year, now.month, now.day);
+      final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
       final startOfMonth = DateTime(now.year, now.month, 1);
+      final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
       final startOfYear = DateTime(now.year, 1, 1);
+      final startOfNextYear = DateTime(now.year + 1, 1, 1);
 
       // Weekly trend amounts
       final Map<String, double> weekdayAmounts = {
@@ -345,19 +375,27 @@ class DashboardProvider with ChangeNotifier {
         final data = doc.data();
         final amount =
             (data['amount'] is num) ? (data['amount'] as num).toDouble() : 0.0;
-        final status = data['paymentStatus'] ?? data['payment_status'] ?? '';
-        final mode = data['paymentMode'] ?? data['payment_mode'] ?? '';
+        final status = normalizePaymentStatus(data['paymentStatus'] ?? data['payment_status'] ?? data['status']);
+        final mode = normalizePaymentMode(data['paymentMode'] ?? data['payment_mode'] ?? data['paymentMethod']);
         final createdAtStr = data['createdAt'] ?? data['created_at'];
 
         if (status == 'cancelled') continue;
 
+        bool isToday = false;
+        bool isMonth = false;
+        bool isYear = false;
+
         if (createdAtStr != null) {
           final date = DateTime.tryParse(createdAtStr);
           if (date != null) {
-            if (date.isAfter(startOfToday)) {
+            isToday = !date.isBefore(startOfToday) && date.isBefore(startOfTomorrow);
+            isMonth = !date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth);
+            isYear = !date.isBefore(startOfYear) && date.isBefore(startOfNextYear);
+
+            if (isToday) {
               todayReceipts++;
             }
-            if (date.isAfter(startOfMonth)) {
+            if (isMonth) {
               monthReceipts++;
             }
           }
@@ -372,18 +410,24 @@ class DashboardProvider with ChangeNotifier {
             cash += amount;
           } else if (mode == 'upi') {
             upi += amount;
+          } else if (mode == 'bank') {
+            bank += amount;
+          } else if (mode == 'cheque') {
+            cheque += amount;
+          } else {
+            other += amount;
           }
 
           if (createdAtStr != null) {
             final date = DateTime.tryParse(createdAtStr);
             if (date != null) {
-              if (date.isAfter(startOfToday)) {
+              if (isToday) {
                 today += amount;
               }
-              if (date.isAfter(startOfMonth)) {
+              if (isMonth) {
                 monthly += amount;
               }
-              if (date.isAfter(startOfYear)) {
+              if (isYear) {
                 yearly += amount;
               }
 
@@ -435,10 +479,10 @@ class DashboardProvider with ChangeNotifier {
           }
 
           if (date != null) {
-            if (date.isAfter(startOfToday)) {
+            if (!date.isBefore(startOfToday) && date.isBefore(startOfTomorrow)) {
               whatsappToday++;
             }
-            if (date.isAfter(startOfMonth)) {
+            if (!date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth)) {
               whatsappMonth++;
             }
           }
@@ -458,6 +502,9 @@ class DashboardProvider with ChangeNotifier {
         totalDonors: donorsSnapshot.docs.length,
         cashCollection: cash,
         upiCollection: upi,
+        bankCollection: bank,
+        chequeCollection: cheque,
+        otherCollection: other,
         pendingCollection: pending,
         dailyChart: weeklyTrend,
         monthlyChart: [],
@@ -554,9 +601,7 @@ class ReceiptProvider with ChangeNotifier {
     // Base query always scoped to active organization
     Query<Map<String, dynamic>> query = FirebaseFirestore.instance
         .collection('receipts')
-        .where('organizationId', isEqualTo: orgId)
-        .orderBy('createdAt', descending: true)
-        .limit(200);
+        .where('organizationId', isEqualTo: orgId);
 
     final stream = query.snapshots().map((snap) {
       var results = snap.docs.map((d) => ReceiptModel.fromJson(d.data())).toList();
@@ -709,21 +754,21 @@ class ReceiptProvider with ChangeNotifier {
       if (dateFilter != null && dateFilter.isNotEmpty) {
         final now = DateTime.now();
         final startOfToday = DateTime(now.year, now.month, now.day);
+        final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
         final startOfMonth = DateTime(now.year, now.month, 1);
+        final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
         final startOfYear = DateTime(now.year, 1, 1);
+        final startOfNextYear = DateTime(now.year + 1, 1, 1);
 
         loaded = loaded.where((r) {
           final date = DateTime.tryParse(r.createdAt);
           if (date == null) return false;
           if (dateFilter == 'today') {
-            return date.isAfter(startOfToday) ||
-                date.isAtSameMomentAs(startOfToday);
+            return !date.isBefore(startOfToday) && date.isBefore(startOfTomorrow);
           } else if (dateFilter == 'month') {
-            return date.isAfter(startOfMonth) ||
-                date.isAtSameMomentAs(startOfMonth);
+            return !date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth);
           } else if (dateFilter == 'year') {
-            return date.isAfter(startOfYear) ||
-                date.isAtSameMomentAs(startOfYear);
+            return !date.isBefore(startOfYear) && date.isBefore(startOfNextYear);
           }
           return true;
         }).toList();
@@ -738,815 +783,53 @@ class ReceiptProvider with ChangeNotifier {
     }
   }
 
-  // Generate Receipt
+  // Generate Receipt via PostgreSQL Backend API
   Future<Map<String, dynamic>?> createReceipt(
       Map<String, dynamic> receiptData) async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
-    int? firstFailedOpNum;
-    String? failedCollection;
-    String? failedDocPath;
-    String? failedMethod;
-    dynamic failedException;
-
-    void recordFailure({
-      required int opNum,
-      required String collection,
-      required String docPath,
-      required String method,
-      required dynamic exception,
-    }) {
-      if (firstFailedOpNum == null) {
-        firstFailedOpNum = opNum;
-        failedCollection = collection;
-        failedDocPath = docPath;
-        failedMethod = method;
-        failedException = exception;
-      }
-    }
-
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw Exception("User not authenticated.");
+      final payload = {
+        'donorName': receiptData['donorName'] ?? '',
+        'donorMobile': receiptData['donorMobile'] ?? '',
+        'donorEmail': (receiptData['donorEmail'] != null &&
+                receiptData['donorEmail'].toString().isNotEmpty)
+            ? receiptData['donorEmail']
+            : null,
+        'donorAddress': receiptData['donorAddress'],
+        'amount': receiptData['amount'],
+        'purpose': receiptData['purpose'] ?? 'General Donation',
+        'paymentMode': receiptData['paymentMode'] ?? 'cash',
+        'idempotencyKey': receiptData['idempotencyKey'],
+        'templateId': receiptData['templateId'],
+      };
 
-      final uidForPrint = currentUser.uid;
+      final response = await ApiService.post('/receipts', payload);
+      final responseBody = jsonDecode(response.body);
 
-      if (_cachedUid != uidForPrint) {
-        clearCache();
-        _cachedUid = uidForPrint;
-      }
+      if (response.statusCode == 201) {
+        final receiptJson = responseBody['receipt'];
+        final upiPayload = responseBody['upiPayload'];
 
-      String? orgId = _cachedOrgId;
-      Map<String, dynamic>? orgData = _cachedOrgData;
-      String? userDisplayName = _cachedUserDisplayName;
+        final newModel = ReceiptModel.fromJson(receiptJson);
+        _receipts.insert(0, newModel);
+        _isLoading = false;
+        notifyListeners();
 
-      DocumentSnapshot<Map<String, dynamic>>? userDoc;
-
-      if (orgId == null || orgData == null || userDisplayName == null) {
-        print('--------------------------------------------------');
-        print('OPERATION 1');
-        print('Collection: users');
-        print('Document Path: users/$uidForPrint');
-        print('Method: get');
-        print('Current UID: $uidForPrint');
-        print('OrganizationId: $orgId');
-        print('--------------------------------------------------');
-
-        try {
-          userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(currentUser.uid)
-              .get();
-          print('Operation 1: SUCCESS');
-        } catch (e, stack) {
-          print('Operation 1: FAILED');
-          print('FirebaseException:');
-          if (e is FirebaseException) {
-            print('code: ${e.code}');
-            print('message: ${e.message}');
-          } else {
-            print('message: $e');
-          }
-          print('stack: $stack');
-          recordFailure(
-            opNum: 1,
-            collection: 'users',
-            docPath: 'users/$uidForPrint',
-            method: 'get',
-            exception: e,
-          );
-        }
-
-        orgId = userDoc?.data()?['organization_id'] ??
-            userDoc?.data()?['organizationId'];
-        userDisplayName = userDoc?.data()?['name'] ?? 'PavtiBook Collector';
-        
-        // If orgId is null, use a dummy one to allow subsequent steps to attempt rules execution
-        orgId ??= 'dummy_org_id';
-        _cachedOrgId = orgId;
-        _cachedUserDisplayName = userDisplayName;
-
-        print('--------------------------------------------------');
-        print('OPERATION 2');
-        print('Collection: organizations');
-        print('Document Path: organizations/$orgId');
-        print('Method: get');
-        print('Current UID: $uidForPrint');
-        print('OrganizationId: $orgId');
-        print('--------------------------------------------------');
-
-        try {
-          final orgDoc = await FirebaseFirestore.instance
-              .collection('organizations')
-              .doc(orgId)
-              .get();
-          orgData = orgDoc.data() ?? {};
-          _cachedOrgData = orgData;
-          print('Operation 2: SUCCESS');
-        } catch (e, stack) {
-          print('Operation 2: FAILED');
-          print('FirebaseException:');
-          if (e is FirebaseException) {
-            print('code: ${e.code}');
-            print('message: ${e.message}');
-          } else {
-            print('message: $e');
-          }
-          print('stack: $stack');
-          recordFailure(
-            opNum: 2,
-            collection: 'organizations',
-            docPath: 'organizations/$orgId',
-            method: 'get',
-            exception: e,
-          );
-          orgData = {};
-        }
-      }
-
-      // Check if organization is archived (Read Only)
-      if (orgData['isArchived'] == true) {
-        throw Exception("Organization is archived and currently read-only. Cannot create receipts.");
-      }
-
-      print('--------------------------------------------------');
-      print('OPERATION 3');
-      print('Collection: subscriptions');
-      print('Document Path: subscriptions/$orgId');
-      print('Method: get');
-      print('Current UID: $uidForPrint');
-      print('OrganizationId: $orgId');
-      print('--------------------------------------------------');
-
-      DocumentSnapshot<Map<String, dynamic>>? subDoc;
-      try {
-        subDoc = await FirebaseFirestore.instance
-            .collection('subscriptions')
-            .doc(orgId)
-            .get();
-        print('Operation 3: SUCCESS');
-      } catch (e, stack) {
-        print('Operation 3: FAILED');
-        print('FirebaseException:');
-        if (e is FirebaseException) {
-          print('code: ${e.code}');
-          print('message: ${e.message}');
-        } else {
-          print('message: $e');
-        }
-        print('stack: $stack');
-        recordFailure(
-          opNum: 3,
-          collection: 'subscriptions',
-          docPath: 'subscriptions/$orgId',
-          method: 'get',
-          exception: e,
-        );
-      }
-
-      if (subDoc != null && subDoc.exists) {
-        final subData = subDoc.data()!;
-        final used = subData['receiptsUsed'] ?? 0;
-        final limit = subData['receiptLimit'] ?? 10;
-        if (used >= limit) {
-          throw Exception("Receipt limit reached. Please upgrade your plan.");
-        }
-
-        final plan = subData['plan'] ?? 'free_trial';
-        final renewalDateStr = subData['renewalDate'] ?? '';
-        if (renewalDateStr.isNotEmpty) {
-          try {
-            final renewalDate = DateTime.parse(renewalDateStr);
-            if (plan == 'free_trial') {
-              if (DateTime.now().isAfter(renewalDate)) {
-                throw Exception(
-                    "Free trial has expired. Please upgrade your plan.");
-              }
-            } else {
-              print('--------------------------------------------------');
-              print('OPERATION 4');
-              print('Collection: subscription_config');
-              print('Document Path: subscription_config/config');
-              print('Method: get');
-              print('Current UID: $uidForPrint');
-              print('OrganizationId: $orgId');
-              print('--------------------------------------------------');
-
-              try {
-                final configDoc = await FirebaseFirestore.instance
-                    .collection('subscription_config')
-                    .doc('config')
-                    .get();
-                print('Operation 4: SUCCESS');
-              } catch (e, stack) {
-                print('Operation 4: FAILED');
-                print('FirebaseException:');
-                if (e is FirebaseException) {
-                  print('code: ${e.code}');
-                  print('message: ${e.message}');
-                } else {
-                  print('message: $e');
-                }
-                print('stack: $stack');
-                recordFailure(
-                  opNum: 4,
-                  collection: 'subscription_config',
-                  docPath: 'subscription_config/config',
-                  method: 'get',
-                  exception: e,
-                );
-              }
-            }
-          } catch (_) {}
-        }
-      }
-
-      final upiId = orgData['upi_id'] ?? orgData['upiId'] ?? 'org@upi';
-      final orgName = orgData['name'] ?? 'Organization';
-
-      final amount = double.tryParse(receiptData['amount'].toString()) ?? 100.0;
-      final purpose = receiptData['purpose'] ?? 'Donation';
-      final paymentMode = receiptData['paymentMode'] ?? 'cash';
-      final donorName = receiptData['donorName'] ?? 'Guest Donor';
-      final donorMobile = receiptData['donorMobile'] ?? '9999999999';
-      final donorEmail = receiptData['donorEmail'];
-      final donorAddress = receiptData['donorAddress'];
-
-      // Fetch organization customization & signature snapshots
-      final headerLogoUrl = orgData['logo_url'] ?? orgData['logoUrl'];
-      final leftSideImageUrl =
-          orgData['left_side_image_url'] ?? orgData['leftSideImageUrl'];
-      final rightSideImageUrl =
-          orgData['right_side_image_url'] ?? orgData['rightSideImageUrl'];
-      final customStampUrl =
-          orgData['custom_stamp_url'] ?? orgData['customStampUrl'];
-      final footerText = orgData['footer_text'] ?? orgData['footerText'];
-      final orgMerchantName =
-          orgData['upi_merchant_name'] ?? orgData['upiMerchantName'] ?? orgName;
-      final receiptThemeId =
-          orgData['receipt_theme_id'] ?? orgData['receiptThemeId'];
-
-      final inputRole = receiptData['collectorRole'];
-      String collectorRole;
-      String? signatureUrl;
-      String? collectorName;
-      String? collectorDesignation;
-
-      if (inputRole == 'President') {
-        collectorRole = 'President';
-        collectorName = orgData['president_name'] ?? orgData['presidentName'];
-        signatureUrl = orgData['president_signature_url'] ??
-            orgData['presidentSignatureUrl'];
-        collectorDesignation = orgData['president_designation'] ??
-            orgData['presidentDesignation'] ??
-            'President';
-      } else if (inputRole == 'Treasurer') {
-        collectorRole = 'Treasurer';
-        collectorName = orgData['treasurer_name'] ?? orgData['treasurerName'];
-        signatureUrl = orgData['treasurer_signature_url'] ??
-            orgData['treasurerSignatureUrl'];
-        collectorDesignation = orgData['treasurer_designation'] ??
-            orgData['treasurerDesignation'] ??
-            'Treasurer';
-      } else if (inputRole == 'Secretary') {
-        collectorRole = 'Secretary';
-        collectorName = orgData['secretary_name'] ?? orgData['secretaryName'];
-        signatureUrl = orgData['secretary_signature_url'] ??
-            orgData['secretarySignatureUrl'];
-        collectorDesignation = orgData['secretary_designation'] ??
-            orgData['secretaryDesignation'] ??
-            'Secretary';
+        return {
+          'receipt': receiptJson,
+          'upiPayload': upiPayload != null ? {'qrCode': upiPayload} : null,
+        };
       } else {
-        // Fallback to existing logic based on user's role
-        if (userDoc == null) {
-          print('--------------------------------------------------');
-          print('OPERATION 1 (Fallback)');
-          print('Collection: users');
-          print('Document Path: users/$uidForPrint');
-          print('Method: get');
-          print('Current UID: $uidForPrint');
-          print('OrganizationId: $orgId');
-          print('--------------------------------------------------');
-
-          try {
-            userDoc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUser.uid)
-                .get();
-            print('Operation 1 (Fallback): SUCCESS');
-          } catch (e, stack) {
-            print('Operation 1 (Fallback): FAILED');
-            print('FirebaseException:');
-            if (e is FirebaseException) {
-              print('code: ${e.code}');
-              print('message: ${e.message}');
-            } else {
-              print('message: $e');
-            }
-            print('stack: $stack');
-            recordFailure(
-              opNum: 1,
-              collection: 'users',
-              docPath: 'users/$uidForPrint',
-              method: 'get',
-              exception: e,
-            );
-          }
-        }
-        final role = userDoc?.data()?['role'] ?? 'collector';
-        if (role == 'admin' || role == 'president' || role == 'org_admin') {
-          collectorRole = 'President';
-          collectorName = orgData['president_name'] ?? orgData['presidentName'];
-          signatureUrl = orgData['president_signature_url'] ??
-              orgData['presidentSignatureUrl'];
-          collectorDesignation = orgData['president_designation'] ??
-              orgData['presidentDesignation'] ??
-              'President';
-        } else if (role == 'treasurer') {
-          collectorRole = 'Treasurer';
-          collectorName = orgData['treasurer_name'] ?? orgData['treasurerName'];
-          signatureUrl = orgData['treasurer_signature_url'] ??
-              orgData['treasurerSignatureUrl'];
-          collectorDesignation = orgData['treasurer_designation'] ??
-              orgData['treasurerDesignation'] ??
-              'Treasurer';
-        } else {
-          collectorRole = 'Secretary';
-          collectorName = orgData['secretary_name'] ?? orgData['secretaryName'];
-          signatureUrl = orgData['secretary_signature_url'] ??
-              orgData['secretarySignatureUrl'];
-          collectorDesignation = orgData['secretary_designation'] ??
-              orgData['secretaryDesignation'] ??
-              'Secretary';
-        }
-      }
-
-      // Fallback name if bearer name is not configured in Settings
-      collectorName = (collectorName != null && collectorName.trim().isNotEmpty)
-          ? collectorName
-          : userDisplayName;
-
-      // Fetch user doc to get profilePhotoUrl for snapshotting
-      if (userDoc == null) {
-        print('--------------------------------------------------');
-        print('OPERATION 1 (Fallback 2)');
-        print('Collection: users');
-        print('Document Path: users/$uidForPrint');
-        print('Method: get');
-        print('Current UID: $uidForPrint');
-        print('OrganizationId: $orgId');
-        print('--------------------------------------------------');
-
-        try {
-          userDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(currentUser.uid)
-              .get();
-          print('Operation 1 (Fallback 2): SUCCESS');
-        } catch (e, stack) {
-          print('Operation 1 (Fallback 2): FAILED');
-          print('FirebaseException:');
-          if (e is FirebaseException) {
-            print('code: ${e.code}');
-            print('message: ${e.message}');
-          } else {
-            print('message: $e');
-          }
-          print('stack: $stack');
-          recordFailure(
-            opNum: 1,
-            collection: 'users',
-            docPath: 'users/$uidForPrint',
-            method: 'get',
-            exception: e,
-          );
-        }
-      }
-      final collectorPhotoSnapshot = userDoc?.data()?['profilePhotoUrl'] ?? userDoc?.data()?['profile_photo_url'];
-
-      // 1. Fetch/Update Donor Metrics
-      print('--------------------------------------------------');
-      print('OPERATION 5');
-      print('Collection: donors');
-      print('Document Path: donors (Query: organizationId=$orgId, mobile=$donorMobile)');
-      print('Method: get');
-      print('Current UID: $uidForPrint');
-      print('OrganizationId: $orgId');
-      print('--------------------------------------------------');
-
-      QuerySnapshot<Map<String, dynamic>>? donorQuery;
-      try {
-        donorQuery = await FirebaseFirestore.instance
-            .collection('donors')
-            .where('organizationId', isEqualTo: orgId)
-            .where('mobile', isEqualTo: donorMobile)
-            .limit(1)
-            .get();
-        print('Operation 5: SUCCESS');
-      } catch (e, stack) {
-        print('Operation 5: FAILED');
-        print('FirebaseException:');
-        if (e is FirebaseException) {
-          print('code: ${e.code}');
-          print('message: ${e.message}');
-        } else {
-          print('message: $e');
-        }
-        print('stack: $stack');
-        recordFailure(
-          opNum: 5,
-          collection: 'donors',
-          docPath: 'donors (Query)',
-          method: 'get',
-          exception: e,
-        );
-      }
-
-      String donorId = 'error_donor_id';
-      if (donorQuery != null && donorQuery.docs.isNotEmpty) {
-        final doc = donorQuery.docs.first;
-        donorId = doc.id;
-        final currentTotal = (doc.data()['totalDonated'] is num)
-            ? (doc.data()['totalDonated'] as num).toDouble()
-            : 0.0;
-        final currentCount = doc.data()['donationCount'] ?? 0;
-
-        print('--------------------------------------------------');
-        print('OPERATION 6 (Update)');
-        print('Collection: donors');
-        print('Document Path: donors/$donorId');
-        print('Method: update');
-        print('Current UID: $uidForPrint');
-        print('OrganizationId: $orgId');
-        print('--------------------------------------------------');
-
-        try {
-          await doc.reference.update({
-            'name': donorName,
-            if (donorEmail != null) 'email': donorEmail,
-            if (donorAddress != null) 'address': donorAddress,
-            'totalDonated': currentTotal + amount,
-            'donationCount': currentCount + 1,
-          });
-          print('Operation 6: SUCCESS');
-        } catch (e, stack) {
-          print('Operation 6: FAILED');
-          print('FirebaseException:');
-          if (e is FirebaseException) {
-            print('code: ${e.code}');
-            print('message: ${e.message}');
-          } else {
-            print('message: $e');
-          }
-          print('stack: $stack');
-          recordFailure(
-            opNum: 6,
-            collection: 'donors',
-            docPath: 'donors/$donorId',
-            method: 'update',
-            exception: e,
-          );
-        }
-      } else {
-        final donorRef = FirebaseFirestore.instance.collection('donors').doc();
-        donorId = donorRef.id;
-
-        print('--------------------------------------------------');
-        print('OPERATION 6 (Set)');
-        print('Collection: donors');
-        print('Document Path: donors/$donorId');
-        print('Method: set');
-        print('Current UID: $uidForPrint');
-        print('OrganizationId: $orgId');
-        print('--------------------------------------------------');
-
-        try {
-          await donorRef.set({
-            'id': donorId,
-            'organizationId': orgId,
-            'name': donorName,
-            'mobile': donorMobile,
-            'email': donorEmail,
-            'address': donorAddress,
-            'totalDonated': amount,
-            'donationCount': 1,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-          print('Operation 6: SUCCESS');
-        } catch (e, stack) {
-          print('Operation 6: FAILED');
-          print('FirebaseException:');
-          if (e is FirebaseException) {
-            print('code: ${e.code}');
-            print('message: ${e.message}');
-          } else {
-            print('message: $e');
-          }
-          print('stack: $stack');
-          recordFailure(
-            opNum: 6,
-            collection: 'donors',
-            docPath: 'donors/$donorId',
-            method: 'set',
-            exception: e,
-          );
-        }
-      }
-
-      // Per-org counter prevents number collisions across organizations.
-      final counterRef = FirebaseFirestore.instance
-          .collection('counters')
-          .doc('receiptCounter_$orgId');
-
-      print('--------------------------------------------------');
-      print('OPERATION 7');
-      print('Collection: counters');
-      print('Document Path: counters/receiptCounter');
-      print('Method: runTransaction');
-      print('Current UID: $uidForPrint');
-      print('OrganizationId: $orgId');
-      print('--------------------------------------------------');
-
-      int seqNum;
-      try {
-        seqNum = await FirebaseFirestore.instance
-            .runTransaction<int>((transaction) async {
-          final counterSnapshot = await transaction.get(counterRef);
-          if (!counterSnapshot.exists) {
-            transaction.set(counterRef, {'currentNumber': 1});
-            return 1;
-          } else {
-            final current = counterSnapshot.data()?['currentNumber'] ?? 0;
-            final next = current + 1;
-            transaction.update(counterRef, {'currentNumber': next});
-            return next;
-          }
-        });
-        print('Operation 7: SUCCESS');
-      } catch (e, stack) {
-        print('Operation 7: FAILED');
-        print('FirebaseException:');
-        if (e is FirebaseException) {
-          print('code: ${e.code}');
-          print('message: ${e.message}');
-        } else {
-          print('message: $e');
-        }
-        print('stack: $stack');
-        recordFailure(
-          opNum: 7,
-          collection: 'counters',
-          docPath: 'counters/receiptCounter_$orgId',
-          method: 'runTransaction',
-          exception: e,
-        );
-        // Cannot create receipt without a valid sequence number.
-        _errorMessage = 'Failed to generate receipt number. Please try again.';
+        _errorMessage = responseBody['message'] ?? 'Failed to generate receipt.';
         _isLoading = false;
         notifyListeners();
         return null;
       }
-
-      final year = DateTime.now().year;
-      final receiptNumber = 'PB-$year-${seqNum.toString().padLeft(6, '0')}';
-      final upiDeepLink =
-          'upi://pay?pa=$upiId&pn=${Uri.encodeComponent(orgMerchantName)}&am=$amount';
-
-      // 3. Create Receipt in Firestore
-      final receiptRef =
-          FirebaseFirestore.instance.collection('receipts').doc();
-      final receiptId = receiptRef.id;
-
-      final newReceipt = {
-        'id': receiptId,
-        'organizationId': orgId,
-        'templateId': receiptData['templateId'] ?? 'classic',
-        'donorId': donorId,
-        'collectorId': currentUser.uid,
-        'receiptNumber': receiptNumber,
-        'amount': amount,
-        'purpose': purpose,
-        'paymentMode': paymentMode,
-        'paymentStatus': (paymentMode == 'upi' || paymentMode == 'pending')
-            ? 'pending'
-            : 'paid',
-        'paidAt':
-            paymentMode == 'cash' ? DateTime.now().toIso8601String() : null,
-        'qrCodeValue': paymentMode == 'upi' ? upiDeepLink : '',
-        'createdAt': DateTime.now().toIso8601String(),
-        'donorName': donorName,
-        'donorMobile': donorMobile,
-        'collectorName': collectorName,
-        'donorAddress': donorAddress,
-        'headerLogoUrl': headerLogoUrl,
-        'leftSideImageUrl': leftSideImageUrl,
-        'rightSideImageUrl': rightSideImageUrl,
-        'customStampUrl': customStampUrl,
-        'footerText': footerText,
-        'signatureUrl': signatureUrl,
-        'collectorRole': collectorRole,
-        'collectorDesignation': collectorDesignation,
-        'organizationName': orgName,
-        'organizationLogoUrl': headerLogoUrl,
-        'leftImageUrl': leftSideImageUrl,
-        'rightImageUrl': rightSideImageUrl,
-        'stampUrl': customStampUrl,
-        'collectorSignatureUrl': signatureUrl,
-        'receiptThemeId': receiptThemeId,
-        'collectorPhotoSnapshot': collectorPhotoSnapshot,
-        'collectorSignatureSnapshot': signatureUrl,
-        'receiptVersion': 1,
-        // Immutable audit fields — written once at creation, never editable
-        'createdBy': currentUser.uid,
-        'createdByName': collectorName ?? userDisplayName,
-        'createdByRole': collectorRole,
-        'createdByMobile': userDoc?.data()?['mobile'] ?? userDoc?.data()?['phone'] ?? '',
-        'idempotencyKey': receiptData['idempotencyKey'] ?? '',
-      };
-
-      print('--------------------------------------------------');
-      print('OPERATION 8');
-      print('Collection: receipts');
-      print('Document Path: receipts/$receiptId');
-      print('Method: set');
-      print('Current UID: $uidForPrint');
-      print('OrganizationId: $orgId');
-      print('--------------------------------------------------');
-
-      try {
-        await receiptRef.set(newReceipt);
-        print('Operation 8: SUCCESS');
-      } catch (e, stack) {
-        print('Operation 8: FAILED');
-        print('FirebaseException:');
-        if (e is FirebaseException) {
-          print('code: ${e.code}');
-          print('message: ${e.message}');
-        } else {
-          print('message: $e');
-        }
-        print('stack: $stack');
-        recordFailure(
-          opNum: 8,
-          collection: 'receipts',
-          docPath: 'receipts/$receiptId',
-          method: 'set',
-          exception: e,
-        );
-      }
-
-      // Increment receiptsUsed count in subscriptions collection
-      print('--------------------------------------------------');
-      print('OPERATION 9');
-      print('Collection: subscriptions');
-      print('Document Path: subscriptions/$orgId');
-      print('Method: update');
-      print('Current UID: $uidForPrint');
-      print('OrganizationId: $orgId');
-      print('--------------------------------------------------');
-
-      try {
-        await FirebaseFirestore.instance
-            .collection('subscriptions')
-            .doc(orgId)
-            .update({
-          'receiptsUsed': FieldValue.increment(1),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        print('Operation 9: SUCCESS');
-      } catch (e, stack) {
-        print('Operation 9: FAILED');
-        print('FirebaseException:');
-        if (e is FirebaseException) {
-          print('code: ${e.code}');
-          print('message: ${e.message}');
-        } else {
-          print('message: $e');
-        }
-        print('stack: $stack');
-        recordFailure(
-          opNum: 9,
-          collection: 'subscriptions',
-          docPath: 'subscriptions/$orgId',
-          method: 'update',
-          exception: e,
-        );
-      }
-
-      // Add Activity Log
-      print('--------------------------------------------------');
-      print('OPERATION 10');
-      print('Collection: activity_logs');
-      print('Document Path: activity_logs (new doc)');
-      print('Method: add');
-      print('Current UID: $uidForPrint');
-      print('OrganizationId: $orgId');
-      print('--------------------------------------------------');
-
-      try {
-        await FirebaseFirestore.instance.collection('activity_logs').add({
-          'organizationId': orgId,
-          'userId': currentUser.uid,
-          'userName': collectorName ?? userDisplayName,
-          'userRole': collectorRole,
-          'action': 'Receipt Created',
-          'details': 'Created Receipt $receiptNumber',
-          'timestamp': FieldValue.serverTimestamp(),
-        });
-        print('Operation 10: SUCCESS');
-      } catch (e, stack) {
-        print('Operation 10: FAILED');
-        print('FirebaseException:');
-        if (e is FirebaseException) {
-          print('code: ${e.code}');
-          print('message: ${e.message}');
-        } else {
-          print('message: $e');
-        }
-        print('stack: $stack');
-        recordFailure(
-          opNum: 10,
-          collection: 'activity_logs',
-          docPath: 'activity_logs',
-          method: 'add',
-          exception: e,
-        );
-      }
-
-      if (firstFailedOpNum != null) {
-        print('==========');
-        print('FIRST FAILING OPERATION');
-        print('==========');
-        print('Collection: $failedCollection');
-        print('Document: $failedDocPath');
-        print('Method: $failedMethod');
-
-        String rulePath = 'Unknown';
-        if (failedCollection == 'users') rulePath = 'match /users/{userId}';
-        else if (failedCollection == 'organizations') rulePath = 'match /organizations/{orgId}';
-        else if (failedCollection == 'subscriptions') rulePath = 'match /subscriptions/{subId}';
-        else if (failedCollection == 'donors') rulePath = 'match /donors/{donorId}';
-        else if (failedCollection == 'counters') rulePath = 'match /counters/{counterId}';
-        else if (failedCollection == 'receipts') rulePath = 'match /receipts/{receiptId}';
-        else if (failedCollection == 'activity_logs') rulePath = 'match /activity_logs/{logId}';
-
-        print('Firestore Rule path: $rulePath');
-        print('Exception: $failedException');
-
-        String reason = 'Unknown';
-        if (failedException is FirebaseException) {
-          reason = failedException.message ?? 'Permission Denied';
-        }
-        print('Reason: $reason');
-
-        print('Current authenticated UID: ${currentUser.uid}');
-
-        try {
-          final uDoc = await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).get();
-          print('Complete User Document: ${uDoc.data()}');
-        } catch (e) {
-          print('Error reading User Document: $e');
-        }
-
-        try {
-          final mDoc = await FirebaseFirestore.instance.collection('organization_members').doc(currentUser.uid).get();
-          print('organization_members document: ${mDoc.data()}');
-        } catch (e) {
-          print('Error reading organization_members document: $e');
-        }
-
-        if (orgId != null && orgId != 'dummy_org_id') {
-          try {
-            final oDoc = await FirebaseFirestore.instance.collection('organizations').doc(orgId).get();
-            print('organization document: ${oDoc.data()}');
-          } catch (e) {
-            print('Error reading organization document: $e');
-          }
-        }
-
-        try {
-          final cDoc = await FirebaseFirestore.instance.collection('counters').doc('receiptCounter').get();
-          print('receipt counter document: ${cDoc.data()}');
-        } catch (e) {
-          print('Error reading receipt counter document: $e');
-        }
-
-        // Throw the original exception to let UI handle the error state
-        throw failedException;
-      }
-
-      final newModel = ReceiptModel.fromJson(newReceipt);
-      _receipts.insert(0, newModel);
-      _isLoading = false;
-      notifyListeners();
-
-      return {
-        'receipt': newReceipt,
-        'upiPayload': paymentMode == 'upi' ? {'qrCode': upiDeepLink} : null
-      };
     } catch (e) {
+      debugPrint('Receipt creation error: $e');
       _errorMessage = 'Connection error: $e';
     }
 
@@ -1554,6 +837,7 @@ class ReceiptProvider with ChangeNotifier {
     notifyListeners();
     return null;
   }
+
   // Update Pending Payment to paid
   Future<bool> reconcilePayment(
       String receiptId, String paymentMethod, String? transactionRef) async {
@@ -1585,10 +869,10 @@ class ReceiptProvider with ChangeNotifier {
           .collection('receipts')
           .doc(receiptId)
           .update({
-        'status': 'PAID',
-        'paymentStatus': 'PAID',
-        'paymentMethod': paymentMethod, // 'CASH' or 'UPI'
-        'paymentMode': paymentMethod.toLowerCase(), // cash or upi
+        'status': 'paid',
+        'paymentStatus': 'paid',
+        'paymentMethod': normalizePaymentMode(paymentMethod),
+        'paymentMode': normalizePaymentMode(paymentMethod),
         'paidAt': confirmedAt,
         'updatedAt': confirmedAt,
         'pending': false,
@@ -2006,35 +1290,16 @@ class DonorProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw Exception("User not authenticated.");
-
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final orgId = userDoc.data()?['organization_id'] ??
-          userDoc.data()?['organizationId'];
-      if (orgId == null) throw Exception("No organization found.");
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('donors')
-          .where('organizationId', isEqualTo: orgId)
-          .get();
-
-      List<DonorModel> loaded =
-          snapshot.docs.map((doc) => DonorModel.fromJson(doc.data())).toList();
-
-      if (search != null && search.isNotEmpty) {
-        final lower = search.toLowerCase();
-        loaded = loaded
-            .where((d) =>
-                d.name.toLowerCase().contains(lower) ||
-                d.mobile.contains(lower))
-            .toList();
+      final endpoint = search != null && search.isNotEmpty
+          ? '/donors?search=${Uri.encodeComponent(search)}'
+          : '/donors';
+      final response = await ApiService.get(endpoint);
+      if (response.statusCode == 200) {
+        final list = jsonDecode(response.body);
+        if (list is List) {
+          _donors = list.map((d) => DonorModel.fromJson(d)).toList();
+        }
       }
-
-      _donors = loaded;
     } catch (e) {
       debugPrint('Fetch donors error: $e');
     } finally {
@@ -2049,34 +1314,36 @@ class DonorProvider with ChangeNotifier {
     _foundDonorStats = {};
     notifyListeners();
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw Exception("User not authenticated.");
+      final cleanMobile = mobile.replaceAll(RegExp(r'\D'), '');
+      final tenDigit = cleanMobile.length >= 10
+          ? cleanMobile.substring(cleanMobile.length - 10)
+          : cleanMobile;
 
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUser.uid)
-          .get();
-      final orgId = userDoc.data()?['organization_id'] ??
-          userDoc.data()?['organizationId'];
-      if (orgId == null) throw Exception("No organization found.");
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('donors')
-          .where('organizationId', isEqualTo: orgId)
-          .where('mobile', isEqualTo: mobile)
-          .limit(1)
-          .get();
-
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        _foundDonor = DonorModel.fromJson(data);
-        _foundDonorStats = {
-          'totalDonations': data['totalDonated'] ?? 0.0,
-          'donationCount': data['donationCount'] ?? 0,
-        };
-        _isLookingUp = false;
-        notifyListeners();
-        return true;
+      final response = await ApiService.get('/donors/lookup?mobile=$tenDigit');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['found'] == true && data['donor'] != null) {
+          final d = data['donor'];
+          _foundDonor = DonorModel(
+            id: d['id'] ?? '',
+            organizationId: '',
+            name: d['name'] ?? '',
+            mobile: d['mobile'] ?? '',
+            email: d['email'],
+            address: d['address'],
+          );
+          _foundDonorStats = {
+            'totalDonations': (d['totalDonations'] is num)
+                ? (d['totalDonations'] as num).toDouble()
+                : 0.0,
+            'donationCount': (d['donationCount'] is num)
+                ? (d['donationCount'] as num).toInt()
+                : 0,
+          };
+          _isLookingUp = false;
+          notifyListeners();
+          return true;
+        }
       }
     } catch (e) {
       debugPrint('Mobile lookup error: $e');
@@ -2216,53 +1483,13 @@ class TemplateProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser == null) throw Exception("User not authenticated.");
-
-      String? orgId = _cachedOrgId;
-      if (orgId == null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.uid)
-            .get();
-        orgId = userDoc.data()?['organization_id'] ??
-            userDoc.data()?['organizationId'];
-        if (orgId == null) throw Exception("No organization found.");
-        _cachedOrgId = orgId;
+      final response = await ApiService.get('/templates');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          _templates = data.map((t) => TemplateModel.fromJson(t)).toList();
+        }
       }
-
-      final snapshot = await FirebaseFirestore.instance
-          .collection('templates')
-          .where('organizationId', isEqualTo: orgId)
-          .get();
-
-      List<TemplateModel> loaded = snapshot.docs
-          .map((doc) => TemplateModel.fromJson(doc.data()))
-          .toList();
-
-      if (loaded.isEmpty) {
-        final ref = FirebaseFirestore.instance.collection('templates').doc();
-        final defaultTemplate = {
-          'id': ref.id,
-          'organizationId': orgId,
-          'name': 'Classic Template',
-          'type': 'classic',
-          'bg_color': '#FFFDD0',
-          'border_style': 'double',
-          'border_color': '#7A1F1F',
-          'font_family': 'Outfit',
-          'font_color': '#2E1C0C',
-          'logo_visible': true,
-          'god_image_position': 'left',
-          'watermark_opacity': 0.10,
-          'signature_label': 'President / अध्यक्ष',
-          'is_default': true,
-        };
-        await ref.set(defaultTemplate);
-        loaded.add(TemplateModel.fromJson(defaultTemplate));
-      }
-
-      _templates = loaded;
     } catch (e) {
       debugPrint('Fetch templates error: $e');
     } finally {

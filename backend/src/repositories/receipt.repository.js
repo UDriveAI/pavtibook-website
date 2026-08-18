@@ -151,7 +151,7 @@ class ReceiptRepository {
     // Tier 1: Exact cryptographic QR token match (Highest Priority)
     const exactQuery = `
       SELECT r.id as receipt_id, r.receipt_number, r.amount, r.purpose, r.payment_mode, r.payment_status, r.created_at,
-             d.name as donor_name,
+             d.name as donor_name, d.mobile as donor_mobile,
              o.name as organization_name, o.is_verified as organization_verified, o.type as organization_type
       FROM receipts r
       JOIN donors d ON r.donor_id = d.id
@@ -167,7 +167,7 @@ class ReceiptRepository {
     // Tier 2: Legacy receipt_number fallback (For printed legacy receipts without tokens)
     const legacyQuery = `
       SELECT r.id as receipt_id, r.receipt_number, r.amount, r.purpose, r.payment_mode, r.payment_status, r.created_at,
-             d.name as donor_name,
+             d.name as donor_name, d.mobile as donor_mobile,
              o.name as organization_name, o.is_verified as organization_verified, o.type as organization_type
       FROM receipts r
       JOIN donors d ON r.donor_id = d.id
