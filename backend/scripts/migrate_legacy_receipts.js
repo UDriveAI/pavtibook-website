@@ -59,7 +59,7 @@ const APPROVED_ORGS = {
   },
   'su0EkLECkXjQkjpZ76JM': {
     name: 'PavtiBook Admin Org',
-    email: 'admin@pavtibook.online',
+    email: 'admin@pavtibook.com',
     mobile: '8090741571',
     type: 'Ganesh Mandal',
     address: 'Navi Mumbai',
