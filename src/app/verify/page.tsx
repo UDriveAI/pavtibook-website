@@ -8,7 +8,7 @@ export default function VerifySearchPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const router = useRouter();
-  const html5QrCodeRef = useRef<any>(null);
+  const html5QrCodeRef = useRef<{ stop: () => Promise<void>; clear: () => void } | null>(null);
 
   const handleNavigate = (rawId: string) => {
     let clean = rawId.trim();
@@ -48,17 +48,16 @@ export default function VerifySearchPage() {
         { facingMode: "environment" },
         config,
         (decodedText: string) => {
-          // Success callback
           stopScanner();
           handleNavigate(decodedText);
         },
         () => {
-          // Frame error callback — ignore individual frames
+          // ignore frame errors
         }
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Camera scanner error:", err);
-      setScanError("कॅमेरा सुरू करता आला नाही. कृपया कॅमेरा परवानगी (Permission) द्या किंवा खाली पावती नंबर टाईप करा.");
+      setScanError("कॅमेरा सुरू करता आला नाही. कृपया ब्राऊझरला कॅमेरा परवानगी (Allow Camera) द्या किंवा खाली पावती नंबर टाईप करा.");
       setIsScanning(false);
     }
   };
@@ -68,7 +67,9 @@ export default function VerifySearchPage() {
       try {
         await html5QrCodeRef.current.stop();
         html5QrCodeRef.current.clear();
-      } catch (_) {}
+      } catch (e) {
+        console.warn("Scanner stop warning:", e);
+      }
       html5QrCodeRef.current = null;
     }
     setIsScanning(false);
@@ -77,9 +78,7 @@ export default function VerifySearchPage() {
   useEffect(() => {
     return () => {
       if (html5QrCodeRef.current) {
-        try {
-          html5QrCodeRef.current.stop().catch(() => {});
-        } catch (_) {}
+        html5QrCodeRef.current.stop().catch(() => {});
       }
     };
   }, []);
