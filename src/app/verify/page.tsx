@@ -206,9 +206,9 @@ export default function VerifySearchPage() {
               onClick={startScanner}
               style={{
                 width: "100%",
-                background: "linear-gradient(135deg, #2E7D6B 0%, #1B5E50 100%)",
+                background: "linear-gradient(135deg, #8B1E2D 0%, #681521 100%)",
                 color: "#FFFFFF",
-                border: "none",
+                border: "1px solid rgba(139, 30, 45, 0.2)",
                 borderRadius: "12px",
                 padding: "14px 20px",
                 fontSize: "15px",
@@ -218,7 +218,7 @@ export default function VerifySearchPage() {
                 alignItems: "center",
                 justifyContent: "center",
                 gap: "10px",
-                boxShadow: "0 4px 14px rgba(46, 125, 107, 0.25)",
+                boxShadow: "0 4px 16px rgba(139, 30, 45, 0.25)",
                 transition: "transform 0.1s ease",
               }}
             >
