@@ -3460,6 +3460,24 @@
       "classification": "AUTHORITATIVE_PRODUCTION_DUPLICATE",
       "migrationAction": "MIGRATE",
       "targetQrCodeValue": "legacy_PB-2026-000050_manual_aug"
+    },
+    {
+      "firestoreDocId": "manual_live_PB-2026-000134",
+      "organizationId": "G6Bwjna0WrPctK1Mo6jB",
+      "organizationName": "Pranay Bhosale",
+      "receiptNumber": "PB-2026-000134",
+      "donorName": "Nikhil",
+      "donorMobile": "8097041571",
+      "amount": 10,
+      "paymentMode": "cash",
+      "paymentStatus": "paid",
+      "createdAt": "2026-08-19T16:40:00.000000",
+      "createdBy": "tEm4JHuAJOUroSCB1W2vS5KfXeh2",
+      "createdByName": "Pranay Bhosale",
+      "qrCodeValue": "",
+      "classification": "UNIQUE_PRODUCTION",
+      "migrationAction": "MIGRATE",
+      "targetQrCodeValue": "legacy_PB-2026-000134_manual_live"
     }
   ]
 }
