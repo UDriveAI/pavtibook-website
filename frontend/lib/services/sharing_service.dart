@@ -11,7 +11,9 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../models/models.dart';
 import '../widgets/receipt_theme.dart';
-import 'location_service.dart';
+import 'universal_receipt_engine.dart';
+import 'devanagari_shaper.dart';
+import 'amount_to_words_service.dart';
 
 class SharingService {
   static final Map<String, Uint8List> _imageCache = {};
@@ -19,7 +21,7 @@ class SharingService {
   static pw.Font? _cachedTtfBold;
   static pw.Font? _cachedTtfYatra;
 
-  static Future<Uint8List?> _downloadImage(String? url) async {
+  static Future<Uint8List?> _downloadImage(String? url, {int maxRetries = 3}) async {
     if (url == null || url.trim().isEmpty) return null;
     final cleanUrl = url.trim();
 
@@ -28,16 +30,25 @@ class SharingService {
       return _imageCache[cleanUrl];
     }
 
-    try {
-      final response = await http.get(Uri.parse(cleanUrl));
-      if (response.statusCode == 200) {
-        final bytes = response.bodyBytes;
-        _imageCache[cleanUrl] = bytes;
-        debugPrint('[IMAGE_CACHE] Saved ${bytes.length} bytes for URL: $cleanUrl');
-        return bytes;
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final response = await http
+            .get(Uri.parse(cleanUrl))
+            .timeout(const Duration(seconds: 10));
+        if (response.statusCode == 200) {
+          final bytes = response.bodyBytes;
+          if (bytes.isNotEmpty) {
+            _imageCache[cleanUrl] = bytes;
+            debugPrint('[IMAGE_CACHE] Saved ${bytes.length} bytes for URL: $cleanUrl');
+            return bytes;
+          }
+        }
+      } catch (e) {
+        debugPrint('Error downloading image (attempt $attempt/$maxRetries) for $cleanUrl: $e');
+        if (attempt < maxRetries) {
+          await Future.delayed(Duration(milliseconds: 250 * attempt));
+        }
       }
-    } catch (e) {
-      debugPrint('Error downloading image: $e');
     }
     return null;
   }
@@ -297,67 +308,6 @@ class SharingService {
     }
   }
 
-  /// English number to words converter.
-  static String _numberToWords(double amount) {
-    int num = amount.toInt();
-    if (num == 0) return "Zero Rupees Only";
-
-    final units = [
-      "",
-      "One",
-      "Two",
-      "Three",
-      "Four",
-      "Five",
-      "Six",
-      "Seven",
-      "Eight",
-      "Nine",
-      "Ten",
-      "Eleven",
-      "Twelve",
-      "Thirteen",
-      "Fourteen",
-      "Fifteen",
-      "Sixteen",
-      "Seventeen",
-      "Eighteen",
-      "Nineteen"
-    ];
-    final tens = [
-      "",
-      "",
-      "Twenty",
-      "Thirty",
-      "Forty",
-      "Fifty",
-      "Sixty",
-      "Seventy",
-      "Eighty",
-      "Ninety"
-    ];
-
-    String convert(int n) {
-      if (n < 20) {
-        return units[n];
-      }
-      if (n < 100) {
-        return "${tens[n ~/ 10]}${n % 10 != 0 ? " ${units[n % 10]}" : ""}";
-      }
-      if (n < 1000) {
-        return "${units[n ~/ 100]} Hundred${n % 100 != 0 ? " and ${convert(n % 100)}" : ""}";
-      }
-      if (n < 100000) {
-        return "${convert(n ~/ 1000)} Thousand${n % 1000 != 0 ? " ${convert(n % 1000)}" : ""}";
-      }
-      if (n < 10000000) {
-        return "${convert(n ~/ 100000)} Lakh${n % 100000 != 0 ? " ${convert(n % 100000)}" : ""}";
-      }
-      return "${convert(n ~/ 10000000)} Crore${n % 10000000 != 0 ? " ${convert(n % 10000000)}" : ""}";
-    }
-
-    return "${convert(num)} Rupees Only";
-  }
 
   /// Generate a valid A5 Landscape temple receipt PDF document in memory.
   /// Generate a valid A5 Landscape temple receipt PDF document in memory.
@@ -412,9 +362,10 @@ class SharingService {
   }) async {
     final pdf = pw.Document();
 
-    final String lang = (languageCode != null && languageCode.isNotEmpty)
-        ? languageCode
-        : ((headerTextEn != null && headerTextEn.toLowerCase().contains('thank')) ? 'en' : 'mr');
+    final String lang = (languageCode != null && languageCode.trim().isNotEmpty)
+        ? languageCode.trim()
+        : 'mr';
+    final labels = DefaultPavtiBookLabels.getLabels(lang);
 
     final String rawCreatedAt = (receipt != null && receipt.createdAt.isNotEmpty)
         ? receipt.createdAt
@@ -426,6 +377,10 @@ class SharingService {
     final String timeStrPdf = parsedDate != null
         ? DateFormat('hh:mm a').format(parsedDate)
         : (receiptTime != null && receiptTime.isNotEmpty ? receiptTime : "");
+
+    final String effectiveQrCodeValue = (qrCodeValue.trim().isNotEmpty)
+        ? qrCodeValue.trim()
+        : (receipt?.receiptNumber ?? receiptNumber);
 
     final String resDonorName = (receipt?.donorName != null && receipt!.donorName!.trim().isNotEmpty)
         ? receipt.donorName!
@@ -439,8 +394,8 @@ class SharingService {
     final String resDonorEmail = (donorEmail != null && donorEmail.trim().isNotEmpty)
         ? donorEmail.trim()
         : '';
-    final String resDonorId = (receipt?.donorId != null && receipt!.donorId!.trim().isNotEmpty)
-        ? receipt.donorId!
+    final String resDonorId = (receipt?.donorId != null && receipt!.donorId.trim().isNotEmpty)
+        ? receipt.donorId
         : (donorId != null ? donorId.trim() : '');
 
     // Load or retrieve cached custom fonts for Devanagari support
@@ -448,25 +403,18 @@ class SharingService {
     final ttfBold = await _getTtfBold();
     final ttfYatra = await _getTtfYatra();
 
-    final amountWords = _numberToWords(amount);
+    final amountWords = AmountToWordsService.convert(amount, languageCode: languageCode ?? 'mr');
 
     // Download custom images in memory
     final headerLogoBytes = await _downloadImage(headerLogoUrl);
-    final leftSideImageBytes = await _downloadImage(leftSideImageUrl);
-    final rightSideImageBytes = await _downloadImage(rightSideImageUrl);
+    // leftSideImageUrl and rightSideImageUrl are passed through to the receipt but not rendered directly in this PDF layout
     final customStampBytes = await _downloadImage(customStampUrl);
     final signatureBytes = await _downloadImage(signatureUrl);
     final presidentSigBytes = await _downloadImage(presidentSignatureUrl);
     final treasurerSigBytes = await _downloadImage(treasurerSignatureUrl);
     final secretarySigBytes = await _downloadImage(secretarySignatureUrl);
 
-    final pw.MemoryImage? headerLogo =
-        headerLogoBytes != null ? pw.MemoryImage(headerLogoBytes) : null;
-    final pw.MemoryImage? leftSideImage =
-        leftSideImageBytes != null ? pw.MemoryImage(leftSideImageBytes) : null;
-    final pw.MemoryImage? rightSideImage = rightSideImageBytes != null
-        ? pw.MemoryImage(rightSideImageBytes)
-        : null;
+    // headerLogoBytes, leftSideImageBytes, rightSideImageBytes are used below via headerLogoImage
     final pw.MemoryImage? customStamp =
         customStampBytes != null ? pw.MemoryImage(customStampBytes) : null;
     final pw.MemoryImage? signature =
@@ -511,6 +459,16 @@ class SharingService {
       } catch (_) {}
     }
 
+    pw.MemoryImage? headerLogoImage;
+    if (headerLogoBytes != null) {
+      headerLogoImage = pw.MemoryImage(headerLogoBytes);
+    } else {
+      try {
+        final lByteData = await rootBundle.load('assets/images/Pavati-Book-Logo.png');
+        headerLogoImage = pw.MemoryImage(lByteData.buffer.asUint8List());
+      } catch (_) {}
+    }
+
       final resolvedPalette = getThemePalette(
           receiptThemeId,
           OrganizationModel(
@@ -521,8 +479,8 @@ class SharingService {
               isVerified: false,
               subscriptionPlan: 'free'),
           null);
-      final String hexStr = resolvedPalette.primary.value.toRadixString(16).substring(2);
-      final String bgHexStr = resolvedPalette.secondary.value.toRadixString(16).substring(2);
+      final String hexStr = resolvedPalette.primary.toARGB32().toRadixString(16).substring(2);
+      final String bgHexStr = resolvedPalette.secondary.toARGB32().toRadixString(16).substring(2);
 
       final primaryMaroon = (brandPrimaryColorHex != null &&
               brandPrimaryColorHex.isNotEmpty &&
@@ -579,13 +537,17 @@ class SharingService {
                       width: DefaultPavtiBookGeometry.greetingLine.width,
                       height: DefaultPavtiBookGeometry.greetingLine.height,
                       child: pw.Center(
-                        child: pw.Text(
-                          headerTextLocal ?? '॥ श्री गणेशाय नमः ॥',
-                          style: pw.TextStyle(
-                            font: ttfBold,
-                            fontSize: DefaultPavtiBookGeometry.fontGreeting,
-                            fontWeight: pw.FontWeight.bold,
-                            color: primaryMaroon,
+                        child: pw.FittedBox(
+                          fit: pw.BoxFit.scaleDown,
+                          child: pw.Text(
+                            DevanagariShaper.shape(headerTextLocal ?? '॥ श्री गणेशाय नमः ॥'),
+                            style: pw.TextStyle(
+                              font: ttfBold,
+                              fontSize: DefaultPavtiBookGeometry.fontGreeting,
+                              fontWeight: pw.FontWeight.bold,
+                              color: primaryMaroon,
+                              letterSpacing: 2.0,
+                            ),
                           ),
                         ),
                       ),
@@ -602,14 +564,22 @@ class SharingService {
                       child: pw.FittedBox(
                         fit: pw.BoxFit.scaleDown,
                         alignment: pw.Alignment.center,
-                        child: pw.Text(
-                          orgName.isEmpty ? 'आपल्या संस्थेचे नाव' : orgName,
-                          textAlign: pw.TextAlign.center,
-                          style: pw.TextStyle(
-                            font: ttfBold,
-                            fontSize: DefaultPavtiBookGeometry.fontOrgTitle,
-                            fontWeight: pw.FontWeight.bold,
-                            color: primaryMaroon,
+                        child: pw.Container(
+                          constraints: pw.BoxConstraints(
+                            maxWidth: DefaultPavtiBookGeometry.headerOrg.width,
+                            maxHeight: DefaultPavtiBookGeometry.headerOrg.height,
+                          ),
+                          child: pw.Text(
+                            DevanagariShaper.shape((orgName.isEmpty || orgName == 'गणपती बाप्पा मोरया')
+                                ? (lang == 'mr' ? 'आपल्या संस्थेचे नाव' : 'Your Organization Name')
+                                : orgName),
+                            textAlign: pw.TextAlign.center,
+                            style: pw.TextStyle(
+                              font: ttfBold,
+                              fontSize: DefaultPavtiBookGeometry.fontOrgTitle,
+                              fontWeight: pw.FontWeight.bold,
+                              color: primaryMaroon,
+                            ),
                           ),
                         ),
                       ),
@@ -627,12 +597,14 @@ class SharingService {
                         fit: pw.BoxFit.scaleDown,
                         alignment: pw.Alignment.center,
                         child: pw.Text(
-                          (headerTextEn != null && headerTextEn.trim().isNotEmpty)
-                              ? headerTextEn
-                              : 'धर्म / संस्था / मंडळ / NGO / ट्रस्ट',
+                          DevanagariShaper.shape((headerTextLocal != null && headerTextLocal.trim().isNotEmpty)
+                              ? headerTextLocal
+                              : ((headerTextEn != null && headerTextEn.trim().isNotEmpty)
+                                  ? headerTextEn
+                                  : (labels['org_type_desc'] ?? 'धर्म / संस्था / मंडळ / NGO / ट्रस्ट'))),
                           textAlign: pw.TextAlign.center,
                           style: pw.TextStyle(
-                            font: ttfRegular,
+                            font: ttfBold,
                             fontSize: DefaultPavtiBookGeometry.fontSubtitle,
                             color: PdfColors.grey700,
                           ),
@@ -641,34 +613,43 @@ class SharingService {
                     ),
                   ),
 
-                  // Organization Address
-                  if ((orgAddress != null && orgAddress.trim().isNotEmpty) || LocationService.getCachedGpsAddress(null).isNotEmpty)
-                    pw.Positioned(
-                      left: DefaultPavtiBookGeometry.headerAddress.x,
-                      top: DefaultPavtiBookGeometry.headerAddress.y,
-                      child: pw.SizedBox(
-                        width: DefaultPavtiBookGeometry.headerAddress.width,
-                        height: DefaultPavtiBookGeometry.headerAddress.height,
-                        child: pw.FittedBox(
-                          fit: pw.BoxFit.scaleDown,
-                          alignment: pw.Alignment.center,
-                          child: pw.Text(
-                            orgAddress != null && orgAddress.trim().isNotEmpty
-                                ? orgAddress.trim()
-                                : LocationService.getCachedGpsAddress(null),
-                            textAlign: pw.TextAlign.center,
-                            style: pw.TextStyle(
-                              font: ttfRegular,
-                              fontSize: DefaultPavtiBookGeometry.fontAddress,
-                              color: PdfColors.grey800,
-                              fontFallback: [ttfYatra, ttfRegular, ttfBold],
+                  // Organization Address with Vector Location Pin Icon
+                  pw.Positioned(
+                    left: DefaultPavtiBookGeometry.headerAddress.x,
+                    top: DefaultPavtiBookGeometry.headerAddress.y,
+                    child: pw.SizedBox(
+                      width: DefaultPavtiBookGeometry.headerAddress.width,
+                      height: DefaultPavtiBookGeometry.headerAddress.height,
+                      child: pw.FittedBox(
+                        fit: pw.BoxFit.scaleDown,
+                        alignment: pw.Alignment.center,
+                        child: pw.Row(
+                          mainAxisAlignment: pw.MainAxisAlignment.center,
+                          crossAxisAlignment: pw.CrossAxisAlignment.center,
+                          children: [
+                            _buildPdfLocationPinIcon(size: 16, color: PdfColor.fromHex('#D84315')),
+                            pw.SizedBox(width: 4),
+                            pw.Text(
+                              DevanagariShaper.shape((orgAddress != null && orgAddress.trim().isNotEmpty)
+                                  ? (orgAddress.trim().contains('Panvel') || orgAddress.trim().contains('410209')
+                                      ? orgAddress.trim().replaceAll('📍', '').trim()
+                                      : '${orgAddress.trim().replaceAll('📍', '').trim()}, Panvel - 410209')
+                                  : 'kamothe, Panvel - 410209'),
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                font: ttfRegular,
+                                fontSize: DefaultPavtiBookGeometry.fontAddress,
+                                color: PdfColors.grey800,
+                                fontFallback: [ttfYatra, ttfRegular, ttfBold],
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ),
+                  ),
 
-                  // Organization Contact Row (Phone, Email, Website)
+                  // Organization Contact Row with Vector Icons (Phone, Email, Website)
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.headerContact.x,
                     top: DefaultPavtiBookGeometry.headerContact.y,
@@ -680,40 +661,57 @@ class SharingService {
                         alignment: pw.Alignment.center,
                         child: pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.center,
+                          crossAxisAlignment: pw.CrossAxisAlignment.center,
                           children: [
-                            pw.Text('Phone: +91 8097041571  ', style: pw.TextStyle(font: ttfBold, fontSize: DefaultPavtiBookGeometry.fontContact, color: PdfColors.black)),
-                            pw.Text('Email: bhosalepranay1@gmail.com  ', style: pw.TextStyle(font: ttfRegular, fontSize: DefaultPavtiBookGeometry.fontContact, color: PdfColors.black)),
-                            pw.Text('Web: www.yourorg.org', style: pw.TextStyle(font: ttfRegular, fontSize: DefaultPavtiBookGeometry.fontContact, color: PdfColors.black)),
+                            _buildPdfPhoneIcon(size: 16, color: primaryMaroon),
+                            pw.SizedBox(width: 4),
+                            pw.Text(' +91 8097041571     ', style: pw.TextStyle(font: ttfBold, fontSize: DefaultPavtiBookGeometry.fontContact, color: PdfColors.black)),
+                            _buildPdfEmailIcon(size: 16, color: primaryMaroon),
+                            pw.SizedBox(width: 4),
+                            pw.Text(' bhosalepranay1@gmail.com     ', style: pw.TextStyle(font: ttfRegular, fontSize: DefaultPavtiBookGeometry.fontContact, color: PdfColors.black)),
+                            _buildPdfWebIcon(size: 16, color: primaryMaroon),
+                            pw.SizedBox(width: 4),
+                            pw.Text(' www.yourorg.org', style: pw.TextStyle(font: ttfRegular, fontSize: DefaultPavtiBookGeometry.fontContact, color: PdfColors.black)),
                           ],
                         ),
                       ),
                     ),
                   ),
 
-                  // Header Logo & Branding
+                  // Header Logo
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.headerLogo.x,
                     top: DefaultPavtiBookGeometry.headerLogo.y,
                     child: pw.SizedBox(
                       width: DefaultPavtiBookGeometry.headerLogo.width,
                       height: DefaultPavtiBookGeometry.headerLogo.height,
-                      child: pw.Column(
-                        crossAxisAlignment: pw.CrossAxisAlignment.start,
-                        children: [
-                          pw.Row(
-                            crossAxisAlignment: pw.CrossAxisAlignment.center,
-                            children: [
-                              if (logoIconImage != null)
-                                pw.SizedBox(width: 44, height: 50, child: pw.Image(logoIconImage, fit: pw.BoxFit.contain))
-                              else
-                                pw.Text('P', style: pw.TextStyle(font: ttfBold, fontSize: 32, color: primaryMaroon)),
-                              pw.SizedBox(width: 6),
-                              pw.Text('PavtiBook', style: pw.TextStyle(font: ttfBold, fontSize: 32, color: primaryMaroon)),
-                            ],
-                          ),
-                          pw.SizedBox(height: 2),
-                          pw.Text('Digital Trust. Transparent Receipts.', style: pw.TextStyle(font: ttfRegular, fontSize: 11, color: PdfColors.grey700)),
-                        ],
+                      child: pw.Center(
+                        child: pw.SizedBox(
+                          width: DefaultPavtiBookGeometry.headerLogo.width * (logoScale ?? 1.0).clamp(0.6, 1.6),
+                          height: DefaultPavtiBookGeometry.headerLogo.height * (logoScale ?? 1.0).clamp(0.6, 1.6),
+                          child: headerLogoImage != null
+                              ? pw.Image(headerLogoImage, fit: pw.BoxFit.contain, alignment: pw.Alignment.centerLeft)
+                              : pw.SizedBox.shrink(),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Logo Tagline
+                  pw.Positioned(
+                    left: DefaultPavtiBookGeometry.logoTagline.x,
+                    top: DefaultPavtiBookGeometry.logoTagline.y,
+                    child: pw.SizedBox(
+                      width: DefaultPavtiBookGeometry.logoTagline.width,
+                      height: DefaultPavtiBookGeometry.logoTagline.height,
+                      child: pw.Text(
+                        'Digital Trust. Transparent Receipts.',
+                        style: pw.TextStyle(
+                          font: ttfRegular,
+                          fontSize: 13,
+                          color: PdfColors.grey700,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -750,13 +748,13 @@ class SharingService {
                       child: pw.Column(
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         children: [
-                          pw.Text('पावती क्र.', style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.grey300)),
+                          pw.Text(DevanagariShaper.shape(labels['receipt_no_abbr'] ?? 'पावती क्र.'), style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.grey300)),
                           pw.SizedBox(height: 4),
                           pw.Text(receiptNumber, style: pw.TextStyle(font: ttfBold, fontSize: DefaultPavtiBookGeometry.fontSidebarReceiptNo, color: PdfColors.white)),
                           pw.SizedBox(height: 12),
-                          pw.Text('दिनांक : $dateStrPdf', style: pw.TextStyle(font: ttfBold, fontSize: 17, color: PdfColors.white)),
+                          pw.Text(DevanagariShaper.shape('${(labels['date_label'] ?? 'दिनांक').replaceAll(':', '').trim()} : $dateStrPdf'), style: pw.TextStyle(font: ttfBold, fontSize: 17, color: PdfColors.white)),
                           pw.SizedBox(height: 6),
-                          pw.Text('वेळ : $timeStrPdf', style: pw.TextStyle(font: ttfBold, fontSize: 17, color: PdfColors.white)),
+                          pw.Text(DevanagariShaper.shape('${(labels['time_label'] ?? 'वेळ').replaceAll(':', '').trim()} : $timeStrPdf'), style: pw.TextStyle(font: ttfBold, fontSize: 17, color: PdfColors.white)),
                         ],
                       ),
                     ),
@@ -773,17 +771,17 @@ class SharingService {
                         decoration: pw.BoxDecoration(
                           color: PdfColors.white,
                           borderRadius: const pw.BorderRadius.all(pw.Radius.circular(14)),
-                          border: pw.Border.all(color: PdfColors.grey300, width: 1.5),
+                          border: pw.Border.all(color: PdfColor.fromHex('#D84315'), width: 2.2),
                         ),
-                        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                        padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                         child: pw.Column(
                           mainAxisAlignment: pw.MainAxisAlignment.center,
                           children: [
-                            pw.Text('SCAN & VERIFY', style: pw.TextStyle(font: ttfBold, fontSize: 13, color: primaryMaroon)),
+                            pw.Text('SCAN & VERIFY', style: pw.TextStyle(font: ttfBold, fontSize: 13, color: PdfColor.fromHex('#D84315'))),
                             pw.SizedBox(height: 4),
                             pw.SizedBox(
-                              width: 126,
-                              height: 126,
+                              width: 120,
+                              height: 120,
                               child: pw.Stack(
                                 children: [
                                   // Layer 1: High-quality vector QR code
@@ -792,34 +790,34 @@ class SharingService {
                                     top: 0,
                                     child: pw.BarcodeWidget(
                                       barcode: pw.Barcode.qrCode(errorCorrectLevel: pw.BarcodeQRCorrectionLevel.high),
-                                      data: 'https://pavtibook.online/verify/$receiptNumber',
+                                      data: 'https://pavtibook.online/verify/$effectiveQrCodeValue',
                                       color: PdfColors.black,
                                       backgroundColor: PdfColors.white,
-                                      width: 126,
-                                      height: 126,
+                                      width: 120,
+                                      height: 120,
                                     ),
                                   ),
-                                  // Layer 2: Clean solid white background in exact mathematical center (126 - 38) / 2 = 44
+                                  // Layer 2: Clean solid white background in exact mathematical center (120 - 36) / 2 = 42
                                   pw.Positioned(
-                                    left: 44,
-                                    top: 44,
+                                    left: 42,
+                                    top: 42,
                                     child: pw.Container(
-                                      width: 38,
-                                      height: 38,
+                                      width: 36,
+                                      height: 36,
                                       decoration: const pw.BoxDecoration(
                                         color: PdfColors.white,
                                         borderRadius: pw.BorderRadius.all(pw.Radius.circular(6)),
                                       ),
                                     ),
                                   ),
-                                  // Layer 3: PavtiBook logo image centered exactly over white background (126 - 30) / 2 = 48
+                                  // Layer 3: PavtiBook logo icon centered (120 - 28) / 2 = 46
                                   if (logoIconImage != null)
                                     pw.Positioned(
-                                      left: 48,
-                                      top: 48,
+                                      left: 46,
+                                      top: 46,
                                       child: pw.SizedBox(
-                                        width: 30,
-                                        height: 30,
+                                        width: 28,
+                                        height: 28,
                                         child: pw.Image(logoIconImage, fit: pw.BoxFit.contain),
                                       ),
                                     ),
@@ -827,7 +825,7 @@ class SharingService {
                               ),
                             ),
                             pw.SizedBox(height: 4),
-                            pw.Text('UPI / QR', style: pw.TextStyle(font: ttfBold, fontSize: 13, color: PdfColors.grey700)),
+                            pw.Text('UPI / QR', style: pw.TextStyle(font: ttfBold, fontSize: 12, color: PdfColors.grey700)),
                           ],
                         ),
                       ),
@@ -853,7 +851,7 @@ class SharingService {
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.donorTitlePill.x,
                     top: DefaultPavtiBookGeometry.donorTitlePill.y,
-                    child: _buildPdfPill('देणगीदार तपशील', primaryMaroon, 16, DefaultPavtiBookGeometry.donorTitlePill.width + 20.0, DefaultPavtiBookGeometry.donorTitlePill.height, ttfBold),
+                    child: _buildPdfPill(labels['donor_details'] ?? 'देणगीदार माहिती', primaryMaroon, 16, DefaultPavtiBookGeometry.donorTitlePill.width + 20.0, DefaultPavtiBookGeometry.donorTitlePill.height, ttfBold),
                   ),
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.donorFields.x,
@@ -865,11 +863,11 @@ class SharingService {
                         crossAxisAlignment: pw.CrossAxisAlignment.start,
                         mainAxisAlignment: pw.MainAxisAlignment.center,
                         children: [
-                          _buildPdfDonorRow('नाव :', resDonorName, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
-                          _buildPdfDonorRow('पत्ता :', resDonorAddress, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
-                          _buildPdfDonorRow('मोबाईल :', resDonorMobile, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
-                          _buildPdfDonorRow('ईमेल :', resDonorEmail, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
-                          _buildPdfDonorRow('देणगीदार आयडी :', resDonorId, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
+                          _buildPdfDonorRow(labels['donor_name'] ?? 'नाव :', resDonorName, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
+                          _buildPdfDonorRow(labels['donor_address'] ?? 'पत्ता :', resDonorAddress, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
+                          _buildPdfDonorRow(labels['donor_mobile'] ?? 'मोबाईल :', resDonorMobile, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
+                          _buildPdfDonorRow(labels['donor_email'] ?? 'ईमेल :', resDonorEmail, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
+                          _buildPdfDonorRow(labels['donor_id'] ?? 'देणगीदार आयडी :', resDonorId, ttfBold, ttfRegular, primaryMaroon, ttfYatra: ttfYatra),
                         ],
                       ),
                     ),
@@ -886,7 +884,7 @@ class SharingService {
                         child: thankYouBadge != null
                             ? pw.Image(thankYouBadge, fit: pw.BoxFit.contain)
                             : pw.Text(
-                                (lang == 'en') ? 'Thank You!' : 'धन्यवाद!',
+                                DevanagariShaper.shape((lang == 'en') ? 'Thank You!' : 'धन्यवाद!'),
                                 style: pw.TextStyle(font: ttfBold, fontSize: 18, color: primaryMaroon),
                               ),
                       ),
@@ -910,9 +908,16 @@ class SharingService {
                         child: pw.Column(
                           mainAxisAlignment: pw.MainAxisAlignment.center,
                           children: [
-                            pw.Text('• स्वयंचलित क्रमांक', style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColor.fromHex('#2E7D32'))),
+                            pw.Row(
+                              mainAxisAlignment: pw.MainAxisAlignment.center,
+                              children: [
+                                _buildPdfCheckIcon(size: 16, color: PdfColor.fromHex('#2E7D32')),
+                                pw.SizedBox(width: 6),
+                                pw.Text(DevanagariShaper.shape(labels['donor_autonum_title'] ?? 'स्वयंचलित क्रमांक'), style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColor.fromHex('#2E7D32'))),
+                              ],
+                            ),
                             pw.SizedBox(height: 4),
-                            pw.Text('तारीख आणि वेळ आधारित', style: pw.TextStyle(font: ttfRegular, fontSize: 13, color: PdfColor.fromHex('#1B5E20'))),
+                            pw.Text(DevanagariShaper.shape(labels['donor_autonum_sub'] ?? 'तारीख आणि वेळ आधारित'), style: pw.TextStyle(font: ttfRegular, fontSize: 13, color: PdfColor.fromHex('#1B5E20'))),
                           ],
                         ),
                       ),
@@ -923,7 +928,7 @@ class SharingService {
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.donationTitlePill.x,
                     top: DefaultPavtiBookGeometry.donationTitlePill.y,
-                    child: _buildPdfPill('देणगी तपशील', primaryMaroon, 16, DefaultPavtiBookGeometry.donationTitlePill.width + 20.0, DefaultPavtiBookGeometry.donationTitlePill.height, ttfBold),
+                    child: _buildPdfPill(labels['donation_details'] ?? 'देणगी तपशील', primaryMaroon, 16, DefaultPavtiBookGeometry.donationTitlePill.width + 20.0, DefaultPavtiBookGeometry.donationTitlePill.height, ttfBold),
                   ),
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.donationTable.x,
@@ -943,18 +948,18 @@ class SharingService {
                           pw.TableRow(
                             decoration: pw.BoxDecoration(color: primaryMaroon),
                             children: [
-                              _buildPdfTableCell('अ.क्र.', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
-                              _buildPdfTableCell('तपशील', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
-                              _buildPdfTableCell('उद्देश / विभाग', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
-                              _buildPdfTableCell('रक्कम (₹)', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
+                              _buildPdfTableCell(labels['table_sr_no'] ?? 'अ.क्र.', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
+                              _buildPdfTableCell(labels['table_details'] ?? 'तपशील', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
+                              _buildPdfTableCell(labels['table_purpose_dept'] ?? 'उद्देश / विभाग', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
+                              _buildPdfTableCell(labels['table_amount'] ?? 'रक्कम (₹)', ttfBold, 17, PdfColors.white, align: pw.TextAlign.center),
                             ],
                           ),
                           pw.TableRow(
                             decoration: const pw.BoxDecoration(color: PdfColors.white),
                             children: [
                               _buildPdfTableCell('1', ttfRegular, 17, PdfColors.black, align: pw.TextAlign.center),
-                              _buildPdfTableCell(purpose.isNotEmpty ? purpose : 'सामान्य देणगी', ttfRegular, 17, PdfColors.black),
-                              _buildPdfTableCell('सामान्य कार्य', ttfRegular, 17, PdfColors.black),
+                              _buildPdfTableCell(purpose.isNotEmpty ? purpose : (labels['table_default_purpose'] ?? 'Donation (देणगी)'), ttfRegular, 17, PdfColors.black),
+                              _buildPdfTableCell(labels['table_default_dept'] ?? 'सामान्य कार्य', ttfRegular, 17, PdfColors.black),
                               _buildPdfTableCell(amount.toStringAsFixed(2), ttfBold, 17, PdfColors.black, align: pw.TextAlign.right),
                             ],
                           ),
@@ -976,8 +981,9 @@ class SharingService {
                       padding: const pw.EdgeInsets.symmetric(horizontal: 18, vertical: 7),
                       child: pw.Row(
                         children: [
-                          pw.Text('• ', style: pw.TextStyle(font: ttfBold, fontSize: 16, color: primaryMaroon)),
-                          pw.Text('तपशील संपादित करा  •  अनेक आयटम जोडू शकता', style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColors.black)),
+                          _buildPdfPencilIcon(size: 14, color: primaryMaroon),
+                          pw.SizedBox(width: 6),
+                          pw.Text(DevanagariShaper.shape(labels['edit_details_pill'] ?? 'तपशील संपादित करा  •  अनेक आयटम जोडू शकता'), style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColors.black)),
                         ],
                       ),
                     ),
@@ -1003,7 +1009,7 @@ class SharingService {
                             pw.Row(
                               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                               children: [
-                                pw.Text('उपएकूण :', style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.black)),
+                                pw.Text(DevanagariShaper.shape(labels['subtotal'] ?? 'उपएकूण :'), style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.black)),
                                 pw.Text(amount.toStringAsFixed(2), style: pw.TextStyle(font: ttfBold, fontSize: 18, color: PdfColors.black)),
                               ],
                             ),
@@ -1011,7 +1017,7 @@ class SharingService {
                             pw.Row(
                               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                               children: [
-                                pw.Text('सूट :', style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.black)),
+                                pw.Text(DevanagariShaper.shape(labels['discount'] ?? 'सूट :'), style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.black)),
                                 pw.Text('0.00', style: pw.TextStyle(font: ttfRegular, fontSize: 18, color: PdfColors.black)),
                               ],
                             ),
@@ -1021,12 +1027,18 @@ class SharingService {
                             pw.Row(
                               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                               children: [
-                                pw.Text('एकूण रक्कम :', style: pw.TextStyle(font: ttfBold, fontSize: 20, color: primaryMaroon)),
+                                pw.Text(DevanagariShaper.shape(labels['total_amount'] ?? 'एकूण रक्कम :'), style: pw.TextStyle(font: ttfBold, fontSize: 20, color: primaryMaroon)),
                                 pw.Text('₹ ${amount.toStringAsFixed(2)}', style: pw.TextStyle(font: ttfBold, fontSize: 22, color: primaryMaroon)),
                               ],
                             ),
-                            pw.SizedBox(height: 6),
-                            pw.Text('रक्कम शब्दात :  $amountWords', textAlign: pw.TextAlign.right, style: pw.TextStyle(font: ttfRegular, fontSize: 15, color: PdfColors.black)),
+                            if (amountWords.isNotEmpty) ...[
+                              pw.SizedBox(height: 6),
+                              pw.Text(
+                                DevanagariShaper.shape('${labels['amount_in_words_label'] ?? 'रक्कम शब्दात :'}  $amountWords'),
+                                textAlign: pw.TextAlign.right,
+                                style: pw.TextStyle(font: ttfRegular, fontSize: 15, color: PdfColors.black),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1037,7 +1049,7 @@ class SharingService {
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.paymentTitlePill.x,
                     top: DefaultPavtiBookGeometry.paymentTitlePill.y,
-                    child: _buildPdfPill('पेमेंट पद्धत', primaryMaroon, 16, DefaultPavtiBookGeometry.paymentTitlePill.width + 20.0, DefaultPavtiBookGeometry.paymentTitlePill.height, ttfBold),
+                    child: _buildPdfPill(labels['payment_method_title'] ?? 'पेमेंट पद्धत', primaryMaroon, 16, DefaultPavtiBookGeometry.paymentTitlePill.width + 20.0, DefaultPavtiBookGeometry.paymentTitlePill.height, ttfBold),
                   ),
                   pw.Positioned(
                     left: DefaultPavtiBookGeometry.paymentContainer.x,
@@ -1055,11 +1067,11 @@ class SharingService {
                         child: pw.Row(
                           mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
                           children: [
-                            _buildPdfPayChip('रोख', (paymentMode.toLowerCase().contains('cash') || paymentMode.toLowerCase().contains('रोख')), primaryMaroon, ttfBold),
-                            _buildPdfPayChip('UPI', (paymentMode.toLowerCase().contains('upi') || paymentMode.toLowerCase().contains('google') || paymentMode.toLowerCase().contains('phone')), primaryMaroon, ttfBold),
-                            _buildPdfPayChip('बँक हस्तांतरण', (paymentMode.toLowerCase().contains('bank') || paymentMode.toLowerCase().contains('neft') || paymentMode.toLowerCase().contains('rtgs')), primaryMaroon, ttfBold),
-                            _buildPdfPayChip('धनादेश', (paymentMode.toLowerCase().contains('cheque') || paymentMode.toLowerCase().contains('चेक')), primaryMaroon, ttfBold),
-                            _buildPdfPayChip('इतर', paymentMode.toLowerCase() == 'other', primaryMaroon, ttfBold),
+                            _buildPdfPayChip(labels['pay_cash'] ?? 'रोख', (paymentMode.toLowerCase().contains('cash') || paymentMode.toLowerCase().contains('रोख')), primaryMaroon, ttfBold),
+                            _buildPdfPayChip(labels['pay_upi'] ?? 'UPI', (paymentMode.toLowerCase().contains('upi') || paymentMode.toLowerCase().contains('google') || paymentMode.toLowerCase().contains('phone')), primaryMaroon, ttfBold),
+                            _buildPdfPayChip(labels['pay_bank'] ?? 'बँक हस्तांतरण', (paymentMode.toLowerCase().contains('bank') || paymentMode.toLowerCase().contains('neft') || paymentMode.toLowerCase().contains('rtgs')), primaryMaroon, ttfBold),
+                            _buildPdfPayChip(labels['pay_cheque'] ?? 'धनादेश', (paymentMode.toLowerCase().contains('cheque') || paymentMode.toLowerCase().contains('चेक')), primaryMaroon, ttfBold),
+                            _buildPdfPayChip(labels['pay_other'] ?? 'इतर', paymentMode.toLowerCase() == 'other', primaryMaroon, ttfBold),
                           ],
                         ),
                       ),
@@ -1084,10 +1096,16 @@ class SharingService {
                           crossAxisAlignment: pw.CrossAxisAlignment.start,
                           mainAxisAlignment: pw.MainAxisAlignment.center,
                           children: [
-                            pw.Text('टीप / नोंद', style: pw.TextStyle(font: ttfBold, fontSize: 16, color: PdfColors.black)),
+                            pw.Row(
+                              children: [
+                                _buildPdfPencilIcon(size: 14, color: PdfColors.black),
+                                pw.SizedBox(width: 6),
+                                pw.Text(DevanagariShaper.shape(labels['notes_title'] ?? 'टीप / नोंद'), style: pw.TextStyle(font: ttfBold, fontSize: 16, color: PdfColors.black)),
+                              ],
+                            ),
                             pw.SizedBox(height: 4),
-                            pw.Text(customNote ?? 'टीप लिहा (ऐच्छिक)', style: pw.TextStyle(font: ttfRegular, fontSize: 14, color: PdfColors.grey700)),
-                            pw.Text('धन्यवाद संदेश / अटी / नोंदी', style: pw.TextStyle(font: ttfRegular, fontSize: 13, color: PdfColors.grey600)),
+                            pw.Text(DevanagariShaper.shape(customNote ?? (labels['notes_write_opt'] ?? 'टीप लिहा (ऐच्छिक)')), style: pw.TextStyle(font: ttfRegular, fontSize: 14, color: PdfColors.grey700)),
+                            pw.Text(DevanagariShaper.shape(labels['notes_thanks_terms'] ?? 'धन्यवाद संदेश / अटी / नोंदी'), style: pw.TextStyle(font: ttfRegular, fontSize: 13, color: PdfColors.grey600)),
                           ],
                         ),
                       ),
@@ -1112,7 +1130,7 @@ class SharingService {
                           mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
                           children: [
                             _buildPdfSignatureCol(
-                              title: (lang == 'en') ? 'President' : 'President / अध्यक्ष',
+                              title: labels['sig_president'] ?? (lang == 'en' ? 'President' : 'President / अध्यक्ष'),
                               personName: presidentName,
                               fontBold: ttfBold,
                               fontRegular: ttfRegular,
@@ -1122,7 +1140,7 @@ class SharingService {
                               ttfYatra: ttfYatra,
                             ),
                             _buildPdfSignatureCol(
-                              title: (lang == 'en') ? 'Treasurer' : 'Treasurer / कोषाध्यक्ष',
+                              title: labels['sig_treasurer'] ?? (lang == 'en' ? 'Treasurer' : 'Treasurer / कोषाध्यक्ष'),
                               personName: treasurerName,
                               fontBold: ttfBold,
                               fontRegular: ttfRegular,
@@ -1132,7 +1150,7 @@ class SharingService {
                               ttfYatra: ttfYatra,
                             ),
                             _buildPdfSignatureCol(
-                              title: (lang == 'en') ? 'Secretary' : 'Secretary / सचिव',
+                              title: labels['sig_secretary'] ?? (lang == 'en' ? 'Secretary' : 'Secretary / सचिव'),
                               personName: secretaryName,
                               fontBold: ttfBold,
                               fontRegular: ttfRegular,
@@ -1148,28 +1166,46 @@ class SharingService {
                   ),
 
                   // Organization Stamp in stampBox
-                  if (customStamp != null)
-                    pw.Positioned(
-                      left: DefaultPavtiBookGeometry.stampBox.x,
-                      top: DefaultPavtiBookGeometry.stampBox.y,
-                      child: pw.SizedBox(
-                        width: DefaultPavtiBookGeometry.stampBox.width,
-                        height: DefaultPavtiBookGeometry.stampBox.height,
-                        child: pw.Center(
-                          child: pw.Container(
-                            width: 96,
-                            height: 96,
-                            child: pw.Center(
-                              child: pw.SizedBox(
-                                width: (48.0 * (stampScale ?? 1.0).clamp(0.5, 2.0)).clamp(24.0, 96.0),
-                                height: (48.0 * (stampScale ?? 1.0).clamp(0.5, 2.0)).clamp(24.0, 96.0),
-                                child: pw.Image(customStamp, fit: pw.BoxFit.contain),
+                  pw.Positioned(
+                    left: DefaultPavtiBookGeometry.stampBox.x,
+                    top: DefaultPavtiBookGeometry.stampBox.y,
+                    child: pw.SizedBox(
+                      width: DefaultPavtiBookGeometry.stampBox.width,
+                      height: DefaultPavtiBookGeometry.stampBox.height,
+                      child: pw.Column(
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        children: [
+                          pw.Container(
+                            width: (48.0 * (stampScale ?? 1.0).clamp(0.5, 2.0)).clamp(28.0, 96.0),
+                            height: (48.0 * (stampScale ?? 1.0).clamp(0.5, 2.0)).clamp(28.0, 96.0),
+                            decoration: pw.BoxDecoration(
+                              shape: pw.BoxShape.circle,
+                              border: pw.Border.all(color: primaryMaroon, width: 2.0),
+                            ),
+                            padding: const pw.EdgeInsets.all(3),
+                            child: pw.Container(
+                              decoration: pw.BoxDecoration(
+                                shape: pw.BoxShape.circle,
+                                border: pw.Border.all(color: PdfColors.grey400, width: 1.2),
                               ),
+                              padding: const pw.EdgeInsets.all(4),
+                              alignment: pw.Alignment.center,
+                              child: customStamp != null
+                                  ? pw.Image(customStamp, fit: pw.BoxFit.contain)
+                                  : (logoIconImage != null
+                                      ? pw.Image(logoIconImage, fit: pw.BoxFit.contain)
+                                      : pw.SizedBox.shrink()),
                             ),
                           ),
-                        ),
+                          pw.SizedBox(height: 2),
+                          pw.Text(
+                            DevanagariShaper.shape(labels['official_stamp'] ?? 'अधिकृत शिक्का'),
+                            style: pw.TextStyle(font: ttfBold, fontSize: 13, color: primaryMaroon),
+                          ),
+                        ],
                       ),
                     ),
+                  ),
 
                   // Right Sidebar Contact Card
                   pw.Positioned(
@@ -1193,7 +1229,7 @@ class SharingService {
                                 borderRadius: const pw.BorderRadius.all(pw.Radius.circular(12)),
                               ),
                               padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              child: pw.Text('संपर्क तपशील', style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColors.white)),
+                              child: pw.Text(DevanagariShaper.shape(labels['contact_details'] ?? 'संपर्क तपशील'), style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColors.white)),
                             ),
                             pw.SizedBox(height: 8),
                             pw.Text('Phone: +91 98765 43210', style: pw.TextStyle(font: ttfBold, fontSize: 14, color: PdfColors.black)),
@@ -1229,19 +1265,19 @@ class SharingService {
                                 borderRadius: const pw.BorderRadius.all(pw.Radius.circular(12)),
                               ),
                               padding: const pw.EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              child: pw.Text('पावती वैशिष्ट्ये', style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColors.white)),
+                              child: pw.Text(DevanagariShaper.shape(labels['receipt_features_title'] ?? 'पावती वैशिष्ट्ये'), style: pw.TextStyle(font: ttfBold, fontSize: 15, color: PdfColors.white)),
                             ),
                             pw.SizedBox(height: 6),
-                            _buildPdfFeatureRow('पावती क्रमांक', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('दिनांक आणि वेळ', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('देणगीदार माहिती', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('मोबाईल नंबर', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('ईमेल', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('देणगी तपशील', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('रक्कम शब्दात', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('पेमेंट पद्धत', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('QR कोड', ttfRegular, ttfBold: ttfBold),
-                            _buildPdfFeatureRow('स्वाक्षऱ्या', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_receipt_no'] ?? 'पावती क्रमांक', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_date_time'] ?? 'दिनांक आणि वेळ', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_donor_info'] ?? 'देणगीदार माहिती', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_mobile_no'] ?? 'मोबाईल नंबर', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_email'] ?? 'ईमेल', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_donation_details'] ?? 'देणगी तपशील', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_amount_words'] ?? 'रक्कम शब्दात', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_payment_method'] ?? 'पेमेंट पद्धत', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_qr_code'] ?? 'QR कोड', ttfRegular, ttfBold: ttfBold),
+                            _buildPdfFeatureRow(labels['feat_signatures'] ?? 'स्वाक्षऱ्या', ttfRegular, ttfBold: ttfBold),
                           ],
                         ),
                       ),
@@ -1264,23 +1300,14 @@ class SharingService {
                         child: pw.Column(
                           crossAxisAlignment: pw.CrossAxisAlignment.center,
                           children: [
-                            pw.Text('ही पावती डिजिटल आहे', style: pw.TextStyle(font: ttfBold, fontSize: 16, color: primaryMaroon)),
+                            pw.Text(DevanagariShaper.shape(labels['digital_receipt_title'] ?? 'ही पावती डिजिटल आहे'), style: pw.TextStyle(font: ttfBold, fontSize: 16, color: primaryMaroon)),
                             pw.SizedBox(height: 6),
                             pw.Row(
                               mainAxisAlignment: pw.MainAxisAlignment.center,
                               children: [
-                                pw.Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: pw.BoxDecoration(
-                                    color: PdfColor.fromHex('#2E7D32'),
-                                    shape: pw.BoxShape.circle,
-                                  ),
-                                  alignment: pw.Alignment.center,
-                                  child: pw.Text('v', style: pw.TextStyle(font: ttfBold, fontSize: 9, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
-                                ),
+                                _buildPdfCheckIcon(size: 14, color: PdfColor.fromHex('#2E7D32')),
                                 pw.SizedBox(width: 6),
-                                pw.Text('QR कोड स्कॅन करून पावतीची पडताळणी करा.', textAlign: pw.TextAlign.center, style: pw.TextStyle(font: ttfRegular, fontSize: 12, color: PdfColors.black)),
+                                pw.Text(DevanagariShaper.shape(labels['digital_receipt_sub'] ?? 'QR कोड स्कॅन करून पावतीची पडताळणी करा.'), textAlign: pw.TextAlign.center, style: pw.TextStyle(font: ttfRegular, fontSize: 12, color: PdfColors.black)),
                               ],
                             ),
                           ],
@@ -1339,10 +1366,15 @@ class SharingService {
                             pw.Row(
                               children: [
                                 if (thankYouBadge != null)
-                                  pw.SizedBox(width: 24, height: 24, child: pw.Image(thankYouBadge, fit: pw.BoxFit.cover)),
+                                  pw.Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: const pw.BoxDecoration(shape: pw.BoxShape.circle),
+                                    child: pw.Image(thankYouBadge, fit: pw.BoxFit.cover),
+                                  ),
                                 pw.SizedBox(width: 8),
                                 pw.Text(
-                                  footerText ?? (lang == 'en' ? 'Thank you sincerely for your valuable donation!' : 'आपल्या अमूल्य देणगीबद्दल मनःपूर्वक धन्यवाद!'),
+                                  DevanagariShaper.shape(labels['footer_thankyou'] ?? 'आपल्या अमूल्य देणगीबद्दल मनःपूर्वक धन्यवाद!'),
                                   style: pw.TextStyle(font: ttfBold, fontSize: 16, color: PdfColors.white),
                                 ),
                               ],
@@ -1637,7 +1669,7 @@ class SharingService {
       ),
       alignment: pw.Alignment.center,
       child: pw.Text(
-        title,
+        DevanagariShaper.shape(title),
         style: pw.TextStyle(
           font: fontBold,
           fontSize: fontSize,
@@ -1648,23 +1680,174 @@ class SharingService {
       ),
     );
   }
+  static pw.Widget _buildPdfCheckIcon({double size = 14.0, PdfColor? color}) {
+    final effectiveColor = color ?? PdfColor.fromHex('#2E7D32');
+    return pw.Container(
+      width: size,
+      height: size,
+      decoration: pw.BoxDecoration(
+        color: effectiveColor,
+        shape: pw.BoxShape.circle,
+      ),
+      alignment: pw.Alignment.center,
+      child: pw.CustomPaint(
+        size: PdfPoint(size * 0.65, size * 0.65),
+        painter: (PdfGraphics canvas, PdfPoint pointSize) {
+          canvas
+            ..setStrokeColor(PdfColors.white)
+            ..setLineWidth(1.8)
+            ..setLineCap(PdfLineCap.round)
+            ..setLineJoin(PdfLineJoin.round)
+            ..moveTo(pointSize.x * 0.2, pointSize.y * 0.5)
+            ..lineTo(pointSize.x * 0.45, pointSize.y * 0.25)
+            ..lineTo(pointSize.x * 0.8, pointSize.y * 0.75)
+            ..strokePath();
+        },
+      ),
+    );
+  }
+
+  static pw.Widget _buildPdfPencilIcon({double size = 14.0, PdfColor? color}) {
+    final effectiveColor = color ?? PdfColor.fromHex('#8B1E2D');
+    return pw.Container(
+      width: size,
+      height: size,
+      alignment: pw.Alignment.center,
+      child: pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (PdfGraphics canvas, PdfPoint pointSize) {
+          canvas
+            ..setStrokeColor(effectiveColor)
+            ..setLineWidth(1.5)
+            ..setLineCap(PdfLineCap.round)
+            ..setLineJoin(PdfLineJoin.round)
+            ..moveTo(pointSize.x * 0.2, pointSize.y * 0.2)
+            ..lineTo(pointSize.x * 0.7, pointSize.y * 0.7)
+            ..lineTo(pointSize.x * 0.85, pointSize.y * 0.85)
+            ..lineTo(pointSize.x * 0.65, pointSize.y * 0.85)
+            ..lineTo(pointSize.x * 0.15, pointSize.y * 0.35)
+            ..closePath()
+            ..strokePath();
+        },
+      ),
+    );
+  }
+
+  static pw.Widget _buildPdfPhoneIcon({double size = 16.0, PdfColor? color}) {
+    final effectiveColor = color ?? PdfColor.fromHex('#7A1C1C');
+    return pw.Container(
+      width: size,
+      height: size,
+      alignment: pw.Alignment.center,
+      child: pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (PdfGraphics canvas, PdfPoint pointSize) {
+          canvas
+            ..setStrokeColor(effectiveColor)
+            ..setLineWidth(1.6)
+            ..setLineCap(PdfLineCap.round)
+            ..setLineJoin(PdfLineJoin.round)
+            ..moveTo(pointSize.x * 0.25, pointSize.y * 0.75)
+            ..lineTo(pointSize.x * 0.45, pointSize.y * 0.75)
+            ..lineTo(pointSize.x * 0.35, pointSize.y * 0.45)
+            ..lineTo(pointSize.x * 0.55, pointSize.y * 0.35)
+            ..lineTo(pointSize.x * 0.75, pointSize.y * 0.55)
+            ..lineTo(pointSize.x * 0.75, pointSize.y * 0.25)
+            ..strokePath();
+        },
+      ),
+    );
+  }
+
+  static pw.Widget _buildPdfEmailIcon({double size = 16.0, PdfColor? color}) {
+    final effectiveColor = color ?? PdfColor.fromHex('#7A1C1C');
+    return pw.Container(
+      width: size,
+      height: size,
+      alignment: pw.Alignment.center,
+      child: pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (PdfGraphics canvas, PdfPoint pointSize) {
+          canvas
+            ..setStrokeColor(effectiveColor)
+            ..setLineWidth(1.5)
+            ..drawRect(pointSize.x * 0.1, pointSize.y * 0.2, pointSize.x * 0.8, pointSize.y * 0.6)
+            ..strokePath()
+            ..moveTo(pointSize.x * 0.1, pointSize.y * 0.8)
+            ..lineTo(pointSize.x * 0.5, pointSize.y * 0.45)
+            ..lineTo(pointSize.x * 0.9, pointSize.y * 0.8)
+            ..strokePath();
+        },
+      ),
+    );
+  }
+
+  static pw.Widget _buildPdfWebIcon({double size = 16.0, PdfColor? color}) {
+    final effectiveColor = color ?? PdfColor.fromHex('#7A1C1C');
+    return pw.Container(
+      width: size,
+      height: size,
+      alignment: pw.Alignment.center,
+      child: pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (PdfGraphics canvas, PdfPoint pointSize) {
+          final r = pointSize.x * 0.4;
+          final cx = pointSize.x * 0.5;
+          final cy = pointSize.y * 0.5;
+          canvas
+            ..setStrokeColor(effectiveColor)
+            ..setLineWidth(1.5)
+            ..drawEllipse(cx, cy, r, r)
+            ..strokePath()
+            ..moveTo(cx - r, cy)
+            ..lineTo(cx + r, cy)
+            ..strokePath()
+            ..drawEllipse(cx, cy, r * 0.5, r)
+            ..strokePath();
+        },
+      ),
+    );
+  }
+
+  static pw.Widget _buildPdfLocationPinIcon({double size = 16.0, PdfColor? color}) {
+    final effectiveColor = color ?? PdfColor.fromHex('#D84315');
+    return pw.Container(
+      width: size,
+      height: size,
+      alignment: pw.Alignment.center,
+      child: pw.CustomPaint(
+        size: PdfPoint(size, size),
+        painter: (PdfGraphics canvas, PdfPoint pointSize) {
+          final cx = pointSize.x * 0.5;
+          final cy = pointSize.y * 0.65;
+          final r = pointSize.x * 0.35;
+          canvas
+            ..setStrokeColor(effectiveColor)
+            ..setFillColor(effectiveColor)
+            ..setLineWidth(1.4)
+            ..drawEllipse(cx, cy, r, r)
+            ..fillPath()
+            ..moveTo(cx - r, cy)
+            ..lineTo(cx, pointSize.y * 0.1)
+            ..lineTo(cx + r, cy)
+            ..fillPath()
+            ..setStrokeColor(PdfColors.white)
+            ..setFillColor(PdfColors.white)
+            ..drawEllipse(cx, cy, r * 0.4, r * 0.4)
+            ..fillPath();
+        },
+      ),
+    );
+  }
+
   static pw.Widget _buildPdfFeatureRow(String text, pw.Font font, {pw.Font? ttfBold}) {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(vertical: 2),
       child: pw.Row(
         children: [
-          pw.Container(
-            width: 14,
-            height: 14,
-            decoration: pw.BoxDecoration(
-              color: PdfColor.fromHex('#2E7D32'),
-              shape: pw.BoxShape.circle,
-            ),
-            alignment: pw.Alignment.center,
-            child: pw.Text('v', style: pw.TextStyle(font: ttfBold ?? font, fontSize: 9, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
-          ),
+          _buildPdfCheckIcon(size: 14, color: PdfColor.fromHex('#2E7D32')),
           pw.SizedBox(width: 6),
-          pw.Text(text, style: pw.TextStyle(font: font, fontSize: 13, color: PdfColors.black, fontFallback: [if (ttfBold != null) ttfBold])),
+          pw.Text(DevanagariShaper.shape(text), style: pw.TextStyle(font: font, fontSize: 13, color: PdfColors.black, fontFallback: [if (ttfBold != null) ttfBold])),
         ],
       ),
     );
@@ -1676,7 +1859,7 @@ class SharingService {
         pw.SizedBox(
           width: 140,
           child: pw.Text(
-            label,
+            DevanagariShaper.shape(label),
             style: pw.TextStyle(
               font: fontBold,
               fontSize: 16,
@@ -1688,7 +1871,7 @@ class SharingService {
         ),
         pw.Expanded(
           child: pw.Text(
-            value,
+            DevanagariShaper.shape(value),
             style: pw.TextStyle(
               font: fontRegular,
               fontSize: 16,
@@ -1705,7 +1888,7 @@ class SharingService {
     return pw.Padding(
       padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       child: pw.Text(
-        text,
+        DevanagariShaper.shape(text),
         textAlign: align,
         style: pw.TextStyle(
           font: font,
@@ -1718,24 +1901,32 @@ class SharingService {
   }
 
   static pw.Widget _buildPdfPayChip(String title, bool selected, PdfColor maroon, pw.Font fontBold, {pw.Font? ttfYatra, pw.Font? ttfRegular}) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      decoration: pw.BoxDecoration(
-        color: selected ? PdfColor.fromHex('#E8F5E9') : PdfColors.white,
-        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
-        border: pw.Border.all(
-          color: selected ? PdfColor.fromHex('#A5D6A7') : PdfColors.grey400,
-          width: selected ? 2.5 : 1.5,
+    return pw.SizedBox(
+      width: 180,
+      height: 38,
+      child: pw.Container(
+        padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: pw.BoxDecoration(
+          color: selected ? PdfColor.fromHex('#E8F5E9') : PdfColors.white,
+          borderRadius: const pw.BorderRadius.all(pw.Radius.circular(10)),
+          border: pw.Border.all(
+            color: selected ? PdfColor.fromHex('#A5D6A7') : PdfColors.grey400,
+            width: selected ? 2.5 : 1.5,
+          ),
         ),
-      ),
-      child: pw.Text(
-        title,
-        style: pw.TextStyle(
-          font: fontBold,
-          fontSize: 14,
-          color: selected ? PdfColor.fromHex('#2E7D32') : PdfColors.black,
-          fontWeight: pw.FontWeight.bold,
-          fontFallback: [if (ttfYatra != null) ttfYatra, if (ttfRegular != null) ttfRegular, fontBold],
+        alignment: pw.Alignment.center,
+        child: pw.FittedBox(
+          fit: pw.BoxFit.scaleDown,
+          child: pw.Text(
+            DevanagariShaper.shape(title),
+            style: pw.TextStyle(
+              font: fontBold,
+              fontSize: 14,
+              color: selected ? PdfColor.fromHex('#2E7D32') : PdfColors.black,
+              fontWeight: pw.FontWeight.bold,
+              fontFallback: [if (ttfYatra != null) ttfYatra, if (ttfRegular != null) ttfRegular, fontBold],
+            ),
+          ),
         ),
       ),
     );
@@ -1769,7 +1960,7 @@ class SharingService {
               fit: pw.BoxFit.scaleDown,
               alignment: pw.Alignment.center,
               child: pw.Text(
-                title,
+                DevanagariShaper.shape(title),
                 style: pw.TextStyle(
                   font: fontBold,
                   fontSize: 16,
@@ -1820,7 +2011,7 @@ class SharingService {
                     fit: pw.BoxFit.scaleDown,
                     alignment: pw.Alignment.center,
                     child: pw.Text(
-                      personName.trim(),
+                      DevanagariShaper.shape(personName.trim()),
                       style: pw.TextStyle(
                         font: fontBold,
                         fontSize: 13,

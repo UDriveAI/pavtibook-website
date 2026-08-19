@@ -7,6 +7,7 @@ import '../models/receipt_template_preset.dart';
 import '../services/universal_receipt_engine.dart';
 import '../config/receipt_typography_config.dart';
 import '../services/location_service.dart';
+import '../services/amount_to_words_service.dart';
 
 /// Production-Grade Universal Receipt Renderer for PavtiBook
 /// DEFAULT PAVTIBOOK layout uses a FIXED MASTER COORDINATE SYSTEM (1536 x 1024).
@@ -86,6 +87,7 @@ class TraditionalReceiptWidget extends StatelessWidget {
         : '';
     final amountVal = receipt.amount;
     final amountFormatted = '₹ ${amountVal.toStringAsFixed(2)}';
+    final assets = ResolvedReceiptAssets.resolve(receipt: receipt, organization: organization, template: template);
 
     // ---- MASTER COLORS FROM RESOLVED PARAMS ----
     final pageBg = params.backgroundColor;
@@ -385,10 +387,10 @@ class TraditionalReceiptWidget extends StatelessWidget {
                 width: DefaultPavtiBookGeometry.headerLogo.width * template.logoScale.clamp(0.6, 1.6),
                 height: DefaultPavtiBookGeometry.headerLogo.height * template.logoScale.clamp(0.6, 1.6),
                 child: (template.logoVisible &&
-                        organization.logoUrl != null &&
-                        organization.logoUrl!.trim().isNotEmpty)
+                        assets.logoUrl != null &&
+                        assets.logoUrl!.isNotEmpty)
                     ? Image.network(
-                        organization.logoUrl!,
+                        assets.logoUrl!,
                         fit: BoxFit.contain,
                         alignment: Alignment.centerLeft,
                         errorBuilder: (_, __, ___) => Image.asset(
@@ -636,7 +638,7 @@ class TraditionalReceiptWidget extends StatelessWidget {
                       children: [
                         Positioned.fill(
                           child: QrImageView(
-                            data: 'https://pavtibook.online/verify/${receipt.receiptNumber}',
+                            data: 'https://pavtibook.online/verify/${receipt.qrCodeValue.trim().isNotEmpty ? receipt.qrCodeValue.trim() : receipt.receiptNumber}',
                             version: QrVersions.auto,
                             size: 120,
                             gapless: false,
@@ -1067,16 +1069,27 @@ class TraditionalReceiptWidget extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${labels['amount_in_words_label'] ?? 'रक्कम शब्दात :'}  ${labels['amount_in_words_value'] ?? (languageCode == 'en' ? 'One Thousand Only' : languageCode == 'hi' ? 'एक हजार रुपये मात्र' : 'एक हजार फक्त')}',
-                        textAlign: TextAlign.right,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 15,
-                            fontStyle: FontStyle.italic,
-                            color: Colors.black87),
+                      Builder(
+                        builder: (_) {
+                          final resolvedAmountWords = AmountToWordsService.convert(receipt.amount, languageCode: languageCode);
+                          if (resolvedAmountWords.isEmpty) return const SizedBox.shrink();
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              const SizedBox(height: 6),
+                              Text(
+                                '${labels['amount_in_words_label'] ?? 'रक्कम शब्दात :'}  $resolvedAmountWords',
+                                textAlign: TextAlign.right,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.black87),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -1202,21 +1215,21 @@ class TraditionalReceiptWidget extends StatelessWidget {
                 children: [
                   sigCol(
                     labels['sig_president'] ?? (languageCode == 'en' ? 'President' : 'President / अध्यक्ष'),
-                    sigUrl: organization.presidentSignatureUrl ?? template.presidentSignatureUrl ?? template.signatureUrl,
-                    scale: organization.presidentSignatureScale != 1.0 ? organization.presidentSignatureScale : template.presidentSignatureScale,
-                    personName: organization.presidentName,
+                    sigUrl: assets.presidentSignatureUrl,
+                    scale: assets.presidentSignatureScale,
+                    personName: assets.presidentName,
                   ),
                   sigCol(
                     labels['sig_treasurer'] ?? (languageCode == 'en' ? 'Treasurer' : 'Treasurer / कोषाध्यक्ष'),
-                    sigUrl: organization.treasurerSignatureUrl ?? template.treasurerSignatureUrl,
-                    scale: organization.treasurerSignatureScale != 1.0 ? organization.treasurerSignatureScale : template.treasurerSignatureScale,
-                    personName: organization.treasurerName,
+                    sigUrl: assets.treasurerSignatureUrl,
+                    scale: assets.treasurerSignatureScale,
+                    personName: assets.treasurerName,
                   ),
                   sigCol(
                     labels['sig_secretary'] ?? (languageCode == 'en' ? 'Secretary' : 'Secretary / सचिव'),
-                    sigUrl: organization.secretarySignatureUrl ?? template.secretarySignatureUrl,
-                    scale: organization.secretarySignatureScale != 1.0 ? organization.secretarySignatureScale : template.secretarySignatureScale,
-                    personName: organization.secretaryName,
+                    sigUrl: assets.secretarySignatureUrl,
+                    scale: assets.secretarySignatureScale,
+                    personName: assets.secretaryName,
                   ),
                 ],
               ),
@@ -1256,10 +1269,10 @@ class TraditionalReceiptWidget extends StatelessWidget {
                           ),
                           padding: const EdgeInsets.all(4),
                           child: Center(
-                            child: (organization.customStampUrl != null &&
-                                    organization.customStampUrl!.trim().isNotEmpty)
+                            child: (assets.stampUrl != null &&
+                                    assets.stampUrl!.isNotEmpty)
                                 ? Image.network(
-                                    organization.customStampUrl!,
+                                    assets.stampUrl!,
                                     width: innerSize,
                                     height: innerSize,
                                     fit: BoxFit.contain,
@@ -1867,16 +1880,26 @@ class TraditionalReceiptWidget extends StatelessWidget {
                               ),
                             ),
                             if (template.showAmountInWords) ...[
-                              const SizedBox(height: 4),
-                              const Divider(height: 1),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${labels['amount_in_words'] ?? 'अक्षरी'} : ${labels['amount_in_words_value'] ?? 'एक हजार रुपये फक्त'}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: (template.bodySize - 1.0).clamp(7.0, 12.0),
-                                  fontStyle: FontStyle.italic,
-                                ),
+                              Builder(
+                                builder: (_) {
+                                  final resolvedAmountWords = AmountToWordsService.convert(receipt.amount, languageCode: languageCode);
+                                  if (resolvedAmountWords.isEmpty) return const SizedBox.shrink();
+                                  return Column(
+                                    children: [
+                                      const SizedBox(height: 4),
+                                      const Divider(height: 1),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${labels['amount_in_words'] ?? 'अक्षरी'} : $resolvedAmountWords',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          fontSize: (template.bodySize - 1.0).clamp(7.0, 12.0),
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               ),
                             ],
                           ],
@@ -1999,7 +2022,7 @@ class TraditionalReceiptWidget extends StatelessWidget {
               children: [
                 Positioned.fill(
                   child: QrImageView(
-                    data: 'https://pavtibook.online/verify/${receipt.receiptNumber}',
+                    data: 'https://pavtibook.online/verify/${receipt.qrCodeValue.trim().isNotEmpty ? receipt.qrCodeValue.trim() : receipt.receiptNumber}',
                     version: QrVersions.auto,
                     size: 64,
                     gapless: false,
