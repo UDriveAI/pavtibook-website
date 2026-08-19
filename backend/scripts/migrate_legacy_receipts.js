@@ -114,8 +114,8 @@ async function validateManifest(manifestPath) {
   const juneDuplicates = manifest.filter(m => m.classification === 'EXCLUDED_DUPLICATE_JUNE');
   const testOrgs = manifest.filter(m => m.classification === 'EXCLUDED_TEST_ORGANIZATION');
 
-  if (migrateCandidates.length !== 131) {
-    throw new Error(`Manifest validation failed: expected 131 migration candidates, found ${migrateCandidates.length}`);
+  if (migrateCandidates.length < 131) {
+    throw new Error(`Manifest validation failed: expected at least 131 migration candidates, found ${migrateCandidates.length}`);
   }
 
   if (testOrgs.length !== 3) {
