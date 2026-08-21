@@ -9,11 +9,10 @@ import {
   MessageSquare,
   Mail,
   Clock,
-  MapPin,
   Send,
   CheckCircle
 } from "lucide-react";
-import { generateWhatsAppLink } from "@/lib/whatsapp";
+import { generateWhatsAppLink, getFormattedWhatsAppDisplay } from "@/lib/whatsapp";
 import { trackContactSubmit, trackWhatsAppClick } from "@/lib/analytics";
 
 export default function ContactPage() {
@@ -28,32 +27,35 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const displayPhone = getFormattedWhatsAppDisplay();
+  const whatsAppLink = generateWhatsAppLink("नमस्कार PavtiBook Team, मला माहिती हवी आहे.");
+
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
 
-    // Basic mobile validation
+    // Mobile validation
     const cleanMobile = mobile.replace(/\s+/g, "");
     if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
-      setErrorMsg("Please enter a valid 10-digit Indian mobile number.");
+      setErrorMsg("कृपया वैध १० अंकी मोबाईल नंबर प्रविष्ट करा. (Please enter a valid 10-digit Indian mobile number).");
       setLoading(false);
       return;
     }
 
-    if (!name || !subject || !message) {
-      setErrorMsg("Please fill in all required fields.");
+    if (!name.trim() || !subject.trim() || !message.trim()) {
+      setErrorMsg("कृपया सर्व आवश्यक माहिती भरा. (Please fill in all required fields).");
       setLoading(false);
       return;
     }
 
     try {
       const res = await submitContactForm({
-        name,
+        name: name.trim(),
         mobile: cleanMobile,
-        email,
-        subject,
-        message,
+        email: email.trim(),
+        subject: subject.trim(),
+        message: message.trim(),
         honeypot,
       });
 
@@ -64,7 +66,7 @@ export default function ContactPage() {
         setErrorMsg(res.message || "An error occurred. Please try again.");
       }
     } catch {
-      setErrorMsg("Network error. Please try again later.");
+      setErrorMsg("Network error. Please try again later or reach us on WhatsApp.");
     } finally {
       setLoading(false);
     }
@@ -77,62 +79,46 @@ export default function ContactPage() {
       <main className="flex-1 pt-28 pb-16 md:pt-36 md:pb-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          <div className="text-center max-w-3xl mx-auto space-y-3 mb-16">
+          <div className="text-center max-w-3xl mx-auto space-y-3 mb-14">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-maroon/10 text-maroon text-xs font-bold uppercase tracking-wider">
+              Contact & Support (संपर्क)
+            </span>
             <h1 className="text-3xl md:text-5xl font-black text-maroon-dark tracking-tight">
               Get in Touch with PavtiBook
             </h1>
-            <p className="text-sm md:text-base font-semibold text-neutral-600 uppercase tracking-wider">
-              Have questions about template setups or pricing? Our team is here to assist.
+            <p className="text-sm md:text-base font-semibold text-neutral-600">
+              Have questions about setting up your Mandal, receipt templates, or pricing? We are here to help.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             
-            {/* Contact Channels Panel */}
+            {/* Left Contact Channels */}
             <div className="lg:col-span-5 space-y-6">
               
-              {(() => {
-                const link = generateWhatsAppLink("Hello PavtiBook Team, I have a question about setting up my trust.");
-                if (link) {
-                  return (
-                    <a
-                      href={link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={() => trackWhatsAppClick("contact_page_card")}
-                      className="block bg-green-brand/5 border-2 border-green-brand/20 p-6 rounded-2xl hover:shadow-md transition-shadow duration-200"
-                    >
-                      <div className="flex gap-4">
-                        <div className="bg-green-brand text-white p-3 rounded-xl shrink-0">
-                          <MessageSquare className="w-6 h-6" />
-                        </div>
-                        <div className="space-y-1">
-                          <h3 className="font-extrabold text-green-brand text-base sm:text-lg">Chat on WhatsApp</h3>
-                          <p className="text-xs text-neutral-600 font-semibold leading-relaxed">
-                            Instant coordination and quick replies from our trust setup desk. Available 24/7.
-                          </p>
-                          <p className="text-sm font-bold text-neutral-800 pt-1">+91 99305 33929</p>
-                        </div>
-                      </div>
-                    </a>
-                  );
-                }
-                return (
-                  <div className="block bg-neutral-105 border-2 border-neutral-200 p-6 rounded-2xl cursor-not-allowed select-none">
-                    <div className="flex gap-4">
-                      <div className="bg-neutral-300 text-neutral-500 p-3 rounded-xl shrink-0">
-                        <MessageSquare className="w-6 h-6" />
-                      </div>
-                      <div className="space-y-1">
-                        <h3 className="font-bold text-neutral-500 text-base">WhatsApp Not Configured</h3>
-                        <p className="text-xs text-neutral-400 font-semibold">
-                          WhatsApp support is temporarily unavailable.
-                        </p>
-                      </div>
-                    </div>
+              {/* WhatsApp Support Card */}
+              <a
+                href={whatsAppLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => trackWhatsAppClick("contact_page_card")}
+                className="block bg-emerald-50 border-2 border-emerald-500/30 p-6 rounded-2xl hover:shadow-md transition-shadow duration-200 group"
+              >
+                <div className="flex gap-4">
+                  <div className="bg-emerald-600 text-white p-3 rounded-xl shrink-0 group-hover:scale-105 transition-transform">
+                    <MessageSquare className="w-6 h-6" />
                   </div>
-                );
-              })()}
+                  <div className="space-y-1">
+                    <h3 className="font-extrabold text-emerald-800 text-base sm:text-lg">Chat on WhatsApp (त्वरित मदत)</h3>
+                    <p className="text-xs text-neutral-600 font-medium leading-relaxed">
+                      Instant coordination and quick replies from our Mandal setup desk.
+                    </p>
+                    <p className="text-sm font-bold text-neutral-900 pt-1">
+                      {displayPhone}
+                    </p>
+                  </div>
+                </div>
+              </a>
 
               {/* Call Details Card */}
               <div className="bg-white p-6 rounded-2xl border border-maroon/10 shadow-sm space-y-4">
@@ -143,9 +129,11 @@ export default function ContactPage() {
                   <div className="space-y-1">
                     <h3 className="font-bold text-maroon-dark text-base">Direct Mobile Support</h3>
                     <p className="text-xs text-neutral-600 font-medium">
-                      Call our team directly for immediate assistance with registration or volunteers.
+                      Call our team for immediate assistance with registration or volunteer logins.
                     </p>
-                    <p className="text-sm font-bold text-neutral-800 pt-1">+91 99305 33929</p>
+                    <p className="text-sm font-bold text-neutral-900 pt-1">
+                      {displayPhone}
+                    </p>
                   </div>
                 </div>
 
@@ -153,15 +141,15 @@ export default function ContactPage() {
 
                 <div className="flex gap-4">
                   <div className="bg-orange-brand/10 text-orange-brand p-3 rounded-xl shrink-0">
-                    <Clock className="w-6 h-6" />
+                    <Mail className="w-6 h-6" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="font-bold text-neutral-800 text-sm">Working Hours</h3>
+                    <h3 className="font-bold text-neutral-800 text-sm">Email Support</h3>
                     <p className="text-xs text-neutral-600 font-medium">
-                      Monday to Saturday
+                      Send official trust inquiries, proposals, or documents.
                     </p>
-                    <p className="text-xs font-bold text-neutral-800">
-                      9:00 AM - 7:00 PM IST
+                    <p className="text-xs font-bold text-neutral-800 pt-0.5">
+                      support@pavtibook.online
                     </p>
                   </div>
                 </div>
@@ -169,67 +157,35 @@ export default function ContactPage() {
                 <hr className="border-neutral-100" />
 
                 <div className="flex gap-4">
-                  <div className="bg-gold-brand/10 text-gold-brand p-3 rounded-xl shrink-0">
-                    <Mail className="w-6 h-6 text-maroon" />
+                  <div className="bg-gold-brand/20 text-maroon p-3 rounded-xl shrink-0">
+                    <Clock className="w-6 h-6" />
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-neutral-800 text-sm">Email Support</h3>
+                  <div className="space-y-0.5">
+                    <h3 className="font-bold text-neutral-800 text-sm">Support Hours</h3>
                     <p className="text-xs text-neutral-600 font-medium">
-                      Send official trust documents or queries to our email address.
+                      Monday to Saturday: 9:00 AM – 7:00 PM IST
                     </p>
-                    <p className="text-xs font-bold text-neutral-850">
-                      admin@pavtibook.online
+                    <p className="text-[11px] text-neutral-500">
+                      (WhatsApp queries monitored during peak festival seasons)
                     </p>
                   </div>
                 </div>
               </div>
-
-              {/* Office Location Card */}
-              <div className="bg-white p-6 rounded-2xl border border-maroon/10 shadow-sm flex gap-4">
-                <div className="bg-neutral-100 p-3 rounded-xl shrink-0 text-neutral-500">
-                  <MapPin className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-bold text-neutral-800 text-sm font-sans">Office Address</h3>
-                  <p className="text-xs text-neutral-600 leading-relaxed font-medium">
-                    Plot No. 171, Sector 21, Kamothe, Panvel – 410209
-                  </p>
-                </div>
-              </div>
-
             </div>
 
-            {/* Contact Form Panel */}
-            <div className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-2xl border border-maroon/10 shadow-lg">
+            {/* Right Contact Form */}
+            <div className="lg:col-span-7 bg-white p-7 sm:p-9 rounded-3xl border border-maroon/10 shadow-md">
               {submitted ? (
-                <div className="text-center py-12 space-y-4 animate-in fade-in zoom-in-95 duration-300">
-                  <div className="w-16 h-16 bg-green-brand/10 text-green-brand rounded-full flex items-center justify-center mx-auto">
-                    <CheckCircle className="w-10 h-10" />
+                <div className="text-center py-12 space-y-4 animate-in fade-in">
+                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                    <CheckCircle className="w-8 h-8" />
                   </div>
-                  <h3 className="text-2xl font-bold text-neutral-850">Message Sent!</h3>
-                  <p className="text-sm text-neutral-600 max-w-md mx-auto font-medium">
-                    Thank you for writing to PavtiBook. We have received your query and will reply via email or call within 24 hours.
+                  <h3 className="text-2xl font-black text-maroon-dark">
+                    संदेश प्राप्त झाला! (Message Sent)
+                  </h3>
+                  <p className="text-xs sm:text-sm text-neutral-600 max-w-md mx-auto leading-relaxed">
+                    Thank you for reaching out. A PavtiBook specialist will review your request and contact you via phone or WhatsApp within 2 hours.
                   </p>
-                  {(() => {
-                    const link = generateWhatsAppLink("Hello PavtiBook Team, I just submitted a contact form message. I'd like to follow up.");
-                    if (link) {
-                      return (
-                        <div className="pt-2">
-                          <a
-                            href={link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => trackWhatsAppClick("contact_success_screen")}
-                            className="inline-flex items-center gap-2 bg-green-brand hover:bg-green-light text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
-                          >
-                            <MessageSquare className="w-4 h-4 shrink-0" />
-                            <span>Talk To PavtiBook On WhatsApp</span>
-                          </a>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
                   <div className="pt-4">
                     <button
                       onClick={() => {
@@ -240,129 +196,128 @@ export default function ContactPage() {
                         setSubject("");
                         setMessage("");
                       }}
-                      className="text-xs text-maroon hover:text-orange-brand font-bold underline cursor-pointer"
+                      className="bg-cream-brand hover:bg-cream-dark text-maroon font-bold text-xs px-6 py-2.5 rounded-xl border border-maroon/20 transition-all cursor-pointer"
                     >
-                      Send another message
+                      Send Another Message
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-6">
-                  <h3 className="font-extrabold text-lg text-maroon-dark border-b border-neutral-100 pb-3">
-                    Send General Message
-                  </h3>
+                <form onSubmit={handleContactSubmit} className="space-y-4">
+                  <div>
+                    <h3 className="text-xl font-black text-maroon-dark">
+                      Send a Message (संदेश पाठवा)
+                    </h3>
+                    <p className="text-xs text-neutral-500 font-medium mt-0.5">
+                      Fill in your details and our team will get back to you promptly.
+                    </p>
+                  </div>
 
                   {errorMsg && (
-                    <div className="bg-red-50 text-red-650 p-3 rounded-lg text-xs font-semibold border border-red-200">
+                    <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-xl font-semibold">
                       {errorMsg}
                     </div>
                   )}
 
-                  <form onSubmit={handleContactSubmit} className="space-y-4">
-                    {/* Honeypot field (spam prevention) */}
-                    <div style={{ display: "none" }} aria-hidden="true">
+                  {/* Honeypot for spam bots */}
+                  <input
+                    type="text"
+                    name="website_honeypot"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    style={{ display: "none" }}
+                    tabIndex={-1}
+                    autoComplete="off"
+                  />
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-neutral-700">
+                        Your Name (नाव) <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
-                        name="email_confirm"
-                        value={honeypot}
-                        onChange={(e) => setHoneypot(e.target.value)}
-                        tabIndex={-1}
-                        autoComplete="off"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Ramesh Patil"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-all"
                       />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Name */}
-                      <div className="space-y-1">
-                        <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                          Full Name <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={name}
-                          onChange={(e) => setName(e.target.value)}
-                          placeholder="Your Name"
-                          className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white focus:border-maroon font-medium"
-                        />
-                      </div>
-                      
-                      {/* Mobile */}
-                      <div className="space-y-1">
-                        <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                          Mobile Number <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          value={mobile}
-                          onChange={(e) => setMobile(e.target.value)}
-                          placeholder="10-digit number"
-                          className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white focus:border-maroon font-medium"
-                        />
-                      </div>
-                    </div>
 
-                    {/* Email */}
                     <div className="space-y-1">
-                      <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                        Email Address
+                      <label className="block text-xs font-bold text-neutral-700">
+                        Mobile Number (मोबाईल) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value)}
+                        placeholder="10-digit mobile number"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-neutral-700">
+                        Email Address (पर्यायी)
                       </label>
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="yourname@gmail.com"
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white focus:border-maroon font-medium"
+                        placeholder="name@example.com"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-all"
                       />
                     </div>
 
-                    {/* Subject */}
                     <div className="space-y-1">
-                      <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                        Subject <span className="text-red-500">*</span>
+                      <label className="block text-xs font-bold text-neutral-700">
+                        Subject (विषय) <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="text"
                         required
                         value={subject}
                         onChange={(e) => setSubject(e.target.value)}
-                        placeholder="e.g. Inquiring about 80G custom receipts"
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white focus:border-maroon font-semibold text-neutral-800"
+                        placeholder="e.g. Mandal Registration / Pricing Inquiry"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-all"
                       />
                     </div>
+                  </div>
 
-                    {/* Message */}
-                    <div className="space-y-1">
-                      <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                        Message <span className="text-red-500">*</span>
-                      </label>
-                      <textarea
-                        required
-                        rows={4}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Detail your question here..."
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2 text-sm outline-none focus:bg-white focus:border-maroon font-medium"
-                      />
-                    </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-neutral-700">
+                      Message / Requirements (संदेश) <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      required
+                      rows={4}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="Please tell us about your Mandal/Trust and what you need help with..."
+                      className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-all resize-none"
+                    />
+                  </div>
 
-                    {/* Submit */}
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full bg-maroon hover:bg-maroon-light disabled:bg-maroon/50 text-white font-bold text-base py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {loading ? (
-                        <span className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                      ) : (
-                        <>
-                          <span>Send Message</span>
-                          <Send className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                  </form>
-                </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-maroon hover:bg-maroon-light disabled:opacity-50 text-white font-bold text-xs sm:text-sm py-3.5 rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    {loading ? (
+                      <span>Sending... (पाठवत आहे...)</span>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4" />
+                        <span>Send Message (संदेश पाठवा)</span>
+                      </>
+                    )}
+                  </button>
+                </form>
               )}
             </div>
 

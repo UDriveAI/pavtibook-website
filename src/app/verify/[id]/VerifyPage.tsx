@@ -136,7 +136,9 @@ export default function VerifyPage({ token, result }: Props) {
         stored.push(feedbackPayload);
         localStorage.setItem("pb_verification_feedback", JSON.stringify(stored));
       }
-    } catch (_) {}
+    } catch {
+      // ignore
+    }
 
     setTimeout(() => {
       setIsSubmitting(false);

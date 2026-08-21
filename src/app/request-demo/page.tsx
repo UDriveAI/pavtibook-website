@@ -10,9 +10,9 @@ import {
   User,
   CheckCircle,
   ArrowRight,
-  ShieldCheck
+  MessageSquare
 } from "lucide-react";
-import { generateWhatsAppLink } from "@/lib/whatsapp";
+import { generateDemoWhatsAppLink, getFormattedWhatsAppDisplay } from "@/lib/whatsapp";
 import { trackDemoRequest, trackWhatsAppClick } from "@/lib/analytics";
 
 export default function RequestDemoPage() {
@@ -28,32 +28,33 @@ export default function RequestDemoPage() {
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const displayPhone = getFormattedWhatsAppDisplay();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
 
-    // Basic mobile validation (Indian mobile format: 10 digits)
     const cleanMobile = mobile.replace(/\s+/g, "");
     if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
-      setErrorMsg("Please enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.");
+      setErrorMsg("कृपया १० अंकी वैध मोबाईल नंबर प्रविष्ट करा. (Please enter a valid 10-digit Indian mobile number).");
       setLoading(false);
       return;
     }
 
-    if (!name || !orgName || !city) {
-      setErrorMsg("Please fill in all the required fields.");
+    if (!name.trim() || !orgName.trim() || !city.trim()) {
+      setErrorMsg("कृपया सर्व आवश्यक माहिती भरा. (Please fill in all required fields).");
       setLoading(false);
       return;
     }
 
     try {
       const res = await submitDemoRequest({
-        name,
+        name: name.trim(),
         mobile: cleanMobile,
-        orgName,
+        orgName: orgName.trim(),
         orgType,
-        city,
+        city: city.trim(),
         receiptsPerMonth,
         honeypot,
       });
@@ -65,7 +66,7 @@ export default function RequestDemoPage() {
         setErrorMsg(res.message || "An error occurred. Please try again.");
       }
     } catch {
-      setErrorMsg("Network error. Please try again later.");
+      setErrorMsg("Network error. Please try again later or ping us on WhatsApp.");
     } finally {
       setLoading(false);
     }
@@ -79,24 +80,23 @@ export default function RequestDemoPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           
           {submitted ? (
-            /* Success State: Animated Traditional Receipt Stamped 'Demo Booked' */
+            /* Success State: Traditional Receipt Pass Stamped 'Demo Booked' */
             <div className="max-w-md mx-auto text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
               <div className="space-y-3">
-                <div className="w-16 h-16 bg-green-brand/10 text-green-brand rounded-full flex items-center justify-center mx-auto shadow-inner">
-                  <CheckCircle className="w-10 h-10" />
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                  <CheckCircle className="w-9 h-9" />
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-maroon-dark">
                   Demo Booked Successfully!
                 </h2>
-                <p className="text-sm text-neutral-600 font-medium">
+                <p className="text-xs sm:text-sm text-neutral-600 font-medium leading-relaxed">
                   We have generated your demo pass. A PavtiBook specialist will contact you on WhatsApp within 2 hours.
                 </p>
               </div>
 
-              {/* The Success Receipt */}
+              {/* The Success Receipt Pass */}
               <div className="bg-[#FFFDF9] traditional-border p-6 shadow-xl relative text-neutral-800 text-left space-y-4 max-w-sm mx-auto overflow-hidden">
-                {/* Diagonal stamp overlay */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] border-4 border-dashed border-green-brand/80 text-green-brand/80 font-black text-xl px-4 py-2 uppercase rounded tracking-widest pointer-events-none select-none z-10 devanagari">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] border-4 border-dashed border-emerald-600/80 text-emerald-700 font-black text-lg px-3 py-1.5 uppercase rounded tracking-widest pointer-events-none select-none z-10 devanagari">
                   बुक झाले / DEMO BOOKED
                 </div>
 
@@ -142,75 +142,72 @@ export default function RequestDemoPage() {
               </div>
 
               <div className="pt-2">
-                {(() => {
-                  const link = generateWhatsAppLink("नमस्कार PavtiBook Team, मला Demo पाहिजे आहे.");
-                  if (link) {
-                    return (
-                      <a
-                        href={link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => trackWhatsAppClick("demo_booking_success")}
-                        className="inline-flex items-center gap-2 bg-green-brand hover:bg-green-light text-white font-bold px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-200"
-                      >
-                        <span>Ping Us on WhatsApp</span>
-                      </a>
-                    );
-                  }
-                  return (
-                    <div className="text-neutral-500 text-xs font-semibold">
-                      WhatsApp Support Not Configured
-                    </div>
-                  );
-                })()}
+                <a
+                  href={generateDemoWhatsAppLink(orgName)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => trackWhatsAppClick("demo_booking_success")}
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-6 py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Connect with Specialist on WhatsApp</span>
+                </a>
               </div>
             </div>
           ) : (
             /* Request Demo Form */
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
               
               {/* Form Info Panel */}
               <div className="lg:col-span-5 space-y-6">
                 <div className="space-y-3">
-                  <h1 className="text-3xl font-black text-maroon-dark tracking-tight leading-tight">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-maroon/10 text-maroon text-xs font-bold uppercase tracking-wider">
+                    Free 15-Min Walkthrough
+                  </span>
+                  <h1 className="text-3xl sm:text-4xl font-black text-maroon-dark tracking-tight leading-tight">
                     Schedule Your Free Demo
                   </h1>
-                  <p className="text-sm text-neutral-600 font-medium leading-relaxed">
-                    Set up a 15-minute screen share with our collection specialists. We will help you design your template, configure UPI, and onboard volunteers.
+                  <p className="text-xs sm:text-sm text-neutral-600 font-medium leading-relaxed">
+                    Set up a 15-minute walkthrough with our collection specialists. We will help you configure your Mandal logo, setup UPI QR codes, and onboard volunteers.
                   </p>
                 </div>
 
-                <ul className="space-y-4">
+                <ul className="space-y-3.5">
                   {[
-                    "Custom temple/mandal receipt styling",
-                    "Volunteer sub-account permissions",
+                    "Custom temple / mandal receipt styling",
+                    "Multi-volunteer sub-account permissions",
                     "Direct bank P2P UPI QR setup",
-                    "Full accounting audit reporting features"
+                    "Complete accounting audit CSV export"
                   ].map((item, idx) => (
                     <li key={idx} className="flex items-center gap-2.5 text-xs text-neutral-700 font-bold">
-                      <span className="h-5 w-5 rounded-full bg-orange-brand/10 text-orange-brand flex items-center justify-center shrink-0">✓</span>
+                      <span className="h-5 w-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">✓</span>
                       <span>{item}</span>
                     </li>
                   ))}
                 </ul>
 
-                <div className="bg-cream-brand/50 border border-maroon/10 p-4 rounded-xl space-y-2">
-                  <p className="text-[11px] text-neutral-500 font-semibold uppercase tracking-wider">Mandal Security Guarantee</p>
-                  <div className="flex items-center gap-2 text-xs font-bold text-neutral-700">
-                    <ShieldCheck className="w-5 h-5 text-green-brand shrink-0" />
-                    <span>Data protected by 256-bit isolation</span>
-                  </div>
+                <div className="bg-cream-brand/60 border border-maroon/10 p-4 rounded-xl space-y-2">
+                  <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Direct Assistance</p>
+                  <a
+                    href={generateDemoWhatsAppLink()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-xs font-bold text-emerald-700 hover:underline"
+                  >
+                    <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Or chat with us on WhatsApp ({displayPhone})</span>
+                  </a>
                 </div>
               </div>
 
               {/* Form Input Panel */}
-              <div className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-2xl border border-maroon/10 shadow-lg space-y-6">
-                <h3 className="font-extrabold text-lg text-maroon-dark border-b border-neutral-100 pb-3">
+              <div className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-maroon/10 shadow-md space-y-5">
+                <h3 className="font-black text-lg text-maroon-dark border-b border-neutral-100 pb-3">
                   Organization & Contact Details
                 </h3>
 
                 {errorMsg && (
-                  <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-semibold border border-red-200">
+                  <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-semibold border border-red-200">
                     {errorMsg}
                   </div>
                 )}
@@ -230,8 +227,8 @@ export default function RequestDemoPage() {
                   
                   {/* Name field */}
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                      Your Name <span className="text-red-500">*</span>
+                    <label className="block text-xs font-bold text-neutral-700">
+                      Your Name (नाव) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-400">
@@ -242,15 +239,15 @@ export default function RequestDemoPage() {
                         required
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        placeholder="Enter full name"
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:bg-white focus:border-maroon transition-colors duration-200 font-medium"
+                        placeholder="e.g. Ramesh Patil"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-colors"
                       />
                     </div>
                   </div>
 
                   {/* Mobile field */}
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
+                    <label className="block text-xs font-bold text-neutral-700">
                       WhatsApp Mobile Number <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -263,16 +260,16 @@ export default function RequestDemoPage() {
                         value={mobile}
                         onChange={(e) => setMobile(e.target.value)}
                         placeholder="10-digit mobile number"
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-11 pr-3 py-2.5 text-sm outline-none focus:bg-white focus:border-maroon transition-colors duration-200 font-medium"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-11 pr-3 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-colors"
                       />
                     </div>
-                    <p className="text-[10px] text-neutral-500 font-medium">For demo login and WhatsApp coordination.</p>
+                    <p className="text-[10px] text-neutral-500">For demo pass & WhatsApp coordination.</p>
                   </div>
 
                   {/* Organization Name */}
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                      Mandal / Trust Name <span className="text-red-500">*</span>
+                    <label className="block text-xs font-bold text-neutral-700">
+                      Mandal / Trust Name (मंडळ / ट्रस्टचे नाव) <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-400">
@@ -284,59 +281,60 @@ export default function RequestDemoPage() {
                         value={orgName}
                         onChange={(e) => setOrgName(e.target.value)}
                         placeholder="e.g. Lalbaugcha Raja Ganesh Mandal"
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:bg-white focus:border-maroon transition-colors duration-200 font-medium"
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-colors"
                       />
                     </div>
                   </div>
 
-                  {/* Organization Type */}
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                      Organization Type
-                    </label>
-                    <select
-                      value={orgType}
-                      onChange={(e) => setOrgType(e.target.value)}
-                      className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:bg-white focus:border-maroon transition-colors duration-200 font-semibold"
-                    >
-                      <option value="Ganesh Mandal">Ganesh Mandal (गणेश मंडळ)</option>
-                      <option value="Navratri Mandal">Navratri Mandal (नवरात्री मंडळ)</option>
-                      <option value="Temple Trust">Temple Trust (मंदिर ट्रस्ट)</option>
-                      <option value="NGO / Trust">NGO / Social Group (सामाजिक संस्था)</option>
-                      <option value="Housing Society">Housing Society (गृहनिर्माण संस्था)</option>
-                      <option value="Other">Other / Miscellaneous</option>
-                    </select>
-                  </div>
+                  {/* Organization Type & City */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-neutral-700">
+                        Organization Type
+                      </label>
+                      <select
+                        value={orgType}
+                        onChange={(e) => setOrgType(e.target.value)}
+                        className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-colors font-medium"
+                      >
+                        <option value="Ganesh Mandal">Ganesh Mandal (गणेश मंडळ)</option>
+                        <option value="Navratri Mandal">Navratri Mandal (नवरात्री मंडळ)</option>
+                        <option value="Temple Trust">Temple Trust (मंदिर ट्रस्ट)</option>
+                        <option value="NGO / Trust">NGO / Social Trust (सामाजिक संस्था)</option>
+                        <option value="Housing Society">Housing Society (गृहनिर्माण संस्था)</option>
+                        <option value="Other">Other / Local Group</option>
+                      </select>
+                    </div>
 
-                  {/* City */}
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                      City / Town <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-400">
-                        <MapPin className="w-4 h-4" />
-                      </span>
-                      <input
-                        type="text"
-                        required
-                        value={city}
-                        onChange={(e) => setCity(e.target.value)}
-                        placeholder="e.g. Mumbai, Pune, Nagpur"
-                        className="w-full bg-neutral-50 border border-neutral-300 rounded-lg pl-9 pr-3 py-2.5 text-sm outline-none focus:bg-white focus:border-maroon transition-colors duration-200 font-medium"
-                      />
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-neutral-700">
+                        City / Town (शहर) <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-neutral-400">
+                          <MapPin className="w-4 h-4" />
+                        </span>
+                        <input
+                          type="text"
+                          required
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="e.g. Mumbai, Pune"
+                          className="w-full bg-neutral-50 border border-neutral-300 rounded-xl pl-9 pr-3 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-colors"
+                        />
+                      </div>
                     </div>
                   </div>
 
                   {/* Approx Receipts Per Month */}
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-neutral-700 uppercase tracking-wide">
-                      Approx. Receipts Generated Per Month
+                    <label className="block text-xs font-bold text-neutral-700">
+                      Approx. Receipts Expected
                     </label>
                     <select
                       value={receiptsPerMonth}
                       onChange={(e) => setReceiptsPerMonth(e.target.value)}
-                      className="w-full bg-neutral-50 border border-neutral-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:bg-white focus:border-maroon transition-colors duration-200 font-semibold"
+                      className="w-full bg-neutral-50 border border-neutral-300 rounded-xl px-3 py-2.5 text-xs sm:text-sm outline-none focus:bg-white focus:border-maroon transition-colors font-medium"
                     >
                       <option value="Under 100">Under 100 receipts</option>
                       <option value="100 - 500">100 to 500 receipts</option>
@@ -349,13 +347,13 @@ export default function RequestDemoPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-maroon hover:bg-maroon-light disabled:bg-maroon/50 text-white font-bold text-base py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center justify-center gap-2 mt-4 cursor-pointer"
+                    className="w-full bg-maroon hover:bg-maroon-light disabled:opacity-50 text-white font-bold text-xs sm:text-sm py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer"
                   >
                     {loading ? (
-                      <span className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>Submitting... (नोंदणी होत आहे...)</span>
                     ) : (
                       <>
-                        <span>Submit Demo Pass Request</span>
+                        <span>Submit Free Demo Request</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
