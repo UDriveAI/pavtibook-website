@@ -19,20 +19,23 @@ function getFirestoreAdmin() {
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!serviceAccountJson) {
     console.warn('[ReceiptRepo] FIREBASE_SERVICE_ACCOUNT_JSON not set — Firestore fallback disabled.');
-    _firestoreAdmin = false; // Mark as unavailable so we don't try again
+    _firestoreAdmin = false;
     return false;
   }
 
   try {
-    const admin = require('firebase-admin');
-    if (!admin.apps.length) {
+    // firebase-admin v13 uses modular imports
+    const { initializeApp, cert, getApps } = require('firebase-admin/app');
+    const { getFirestore } = require('firebase-admin/firestore');
+
+    if (!getApps().length) {
       const serviceAccount = JSON.parse(serviceAccountJson);
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+      initializeApp({
+        credential: cert(serviceAccount),
         projectId: serviceAccount.project_id,
       });
     }
-    _firestoreAdmin = admin.firestore();
+    _firestoreAdmin = getFirestore();
     console.log('[ReceiptRepo] Firebase Admin SDK initialized — Firestore fallback enabled.');
     return _firestoreAdmin;
   } catch (err) {
