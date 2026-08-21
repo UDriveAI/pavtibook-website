@@ -113,32 +113,42 @@ class DashboardProvider with ChangeNotifier {
 
       for (var doc in receiptsSnapshot.docs) {
         final data = doc.data();
+
+        // Exclude deleted / void records
+        final isDeleted = data['isDeleted'] == true ||
+            data['deletedAt'] != null ||
+            data['deleted_at'] != null ||
+            data['is_deleted'] == true;
+        if (isDeleted) continue;
+
+        final status = normalizePaymentStatus(
+            data['paymentStatus'] ?? data['payment_status'] ?? data['status']);
+        if (status == 'cancelled') continue;
+
         final amount = (data['amount'] is num) ? (data['amount'] as num).toDouble() : 0.0;
-        final status = normalizePaymentStatus(data['paymentStatus'] ?? data['payment_status'] ?? data['status']);
         final mode = normalizePaymentMode(data['paymentMode'] ?? data['payment_mode'] ?? data['paymentMethod']);
-        final createdAtStr = data['createdAt'] ?? data['created_at'];
         final createdBy = data['createdBy'] ?? data['collectorId'] ?? '';
         final collectorId = data['collectorId'] ?? '';
-
-        if (status == 'cancelled') continue;
 
         // Member dashboard only aggregates member's own receipts
         if (!isOwnerRole && createdBy != uid && collectorId != uid) continue;
 
+        final parsedDate = parseReceiptDateTime(data['createdAt'] ?? data['created_at']);
         bool isToday = false;
         bool isMonth = false;
         bool isYear = false;
 
-        if (createdAtStr != null) {
-          final date = DateTime.tryParse(createdAtStr);
-          if (date != null) {
-            isToday = !date.isBefore(startOfToday) && date.isBefore(startOfTomorrow);
-            isMonth = !date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth);
-            isYear = !date.isBefore(startOfYear) && date.isBefore(startOfNextYear);
+        if (parsedDate != null) {
+          final localDate = parsedDate.toLocal();
+          isToday = localDate.year == now.year &&
+              localDate.month == now.month &&
+              localDate.day == now.day;
+          isMonth = localDate.year == now.year &&
+              localDate.month == now.month;
+          isYear = localDate.year == now.year;
 
-            if (isToday) todayReceipts++;
-            if (isMonth) monthReceipts++;
-          }
+          if (isToday) todayReceipts++;
+          if (isMonth) monthReceipts++;
         }
 
         if (status == 'paid') {
@@ -158,21 +168,19 @@ class DashboardProvider with ChangeNotifier {
             other += amount;
           }
 
-          if (createdAtStr != null) {
-            final date = DateTime.tryParse(createdAtStr);
-            if (date != null) {
-              if (isToday) today += amount;
-              if (isMonth) monthly += amount;
-              if (isYear) yearly += amount;
+          if (parsedDate != null) {
+            final localDate = parsedDate.toLocal();
+            if (isToday) today += amount;
+            if (isMonth) monthly += amount;
+            if (isYear) yearly += amount;
 
-              final diffDays = now.difference(date).inDays;
-              if (diffDays < 7) {
-                final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                final dayIndex = date.weekday - 1;
-                if (dayIndex >= 0 && dayIndex < 7) {
-                  final dayName = weekdays[dayIndex];
-                  weekdayAmounts[dayName] = (weekdayAmounts[dayName] ?? 0.0) + amount;
-                }
+            final diffDays = now.difference(localDate).inDays;
+            if (diffDays >= 0 && diffDays < 7) {
+              final List<String> weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+              final dayIndex = localDate.weekday - 1;
+              if (dayIndex >= 0 && dayIndex < 7) {
+                final dayName = weekdays[dayIndex];
+                weekdayAmounts[dayName] = (weekdayAmounts[dayName] ?? 0.0) + amount;
               }
             }
           }
@@ -302,14 +310,15 @@ class DashboardProvider with ChangeNotifier {
       if (orgId == null) throw Exception("No organization found for user.");
       _cachedOrgId = orgId;
 
+      final isOwnerRole = userRole == 'admin' ||
+          userRole == 'owner' ||
+          userRole == 'president' ||
+          userRole == 'treasurer';
+
       // Fetch all receipts to calculate totals
       Query<Map<String, dynamic>> query = FirebaseFirestore.instance
           .collection('receipts')
           .where('organizationId', isEqualTo: orgId);
-
-      if (userRole == 'member' || userRole == 'collector') {
-        query = query.where('collectorId', isEqualTo: currentUser.uid);
-      }
 
       final receiptsSnapshot = await query.get();
 
@@ -348,12 +357,6 @@ class DashboardProvider with ChangeNotifier {
       int totalReceipts = 0;
 
       final now = DateTime.now();
-      final startOfToday = DateTime(now.year, now.month, now.day);
-      final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
-      final startOfMonth = DateTime(now.year, now.month, 1);
-      final startOfNextMonth = DateTime(now.year, now.month + 1, 1);
-      final startOfYear = DateTime(now.year, 1, 1);
-      final startOfNextYear = DateTime(now.year + 1, 1, 1);
 
       // Weekly trend amounts
       final Map<String, double> weekdayAmounts = {
@@ -370,34 +373,52 @@ class DashboardProvider with ChangeNotifier {
       int monthReceipts = 0;
       int deliveredReceipts = 0;
       int pendingReceipts = 0;
+      final uid = currentUser.uid;
 
       for (var doc in receiptsSnapshot.docs) {
         final data = doc.data();
-        final amount =
-            (data['amount'] is num) ? (data['amount'] as num).toDouble() : 0.0;
-        final status = normalizePaymentStatus(data['paymentStatus'] ?? data['payment_status'] ?? data['status']);
-        final mode = normalizePaymentMode(data['paymentMode'] ?? data['payment_mode'] ?? data['paymentMethod']);
-        final createdAtStr = data['createdAt'] ?? data['created_at'];
 
+        // Exclude deleted / void records
+        final isDeleted = data['isDeleted'] == true ||
+            data['deletedAt'] != null ||
+            data['deleted_at'] != null ||
+            data['is_deleted'] == true;
+        if (isDeleted) continue;
+
+        final status = normalizePaymentStatus(
+            data['paymentStatus'] ?? data['payment_status'] ?? data['status']);
         if (status == 'cancelled') continue;
 
+        final amount =
+            (data['amount'] is num) ? (data['amount'] as num).toDouble() : 0.0;
+        final mode = normalizePaymentMode(
+            data['paymentMode'] ?? data['payment_mode'] ?? data['paymentMethod']);
+        final createdBy = data['createdBy'] ?? data['collectorId'] ?? '';
+        final collectorId = data['collectorId'] ?? '';
+
+        // Member dashboard only aggregates member's own receipts
+        if (!isOwnerRole && createdBy != uid && collectorId != uid) continue;
+
+        final parsedDate =
+            parseReceiptDateTime(data['createdAt'] ?? data['created_at']);
         bool isToday = false;
         bool isMonth = false;
         bool isYear = false;
 
-        if (createdAtStr != null) {
-          final date = DateTime.tryParse(createdAtStr);
-          if (date != null) {
-            isToday = !date.isBefore(startOfToday) && date.isBefore(startOfTomorrow);
-            isMonth = !date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth);
-            isYear = !date.isBefore(startOfYear) && date.isBefore(startOfNextYear);
+        if (parsedDate != null) {
+          final localDate = parsedDate.toLocal();
+          isToday = localDate.year == now.year &&
+              localDate.month == now.month &&
+              localDate.day == now.day;
+          isMonth = localDate.year == now.year &&
+              localDate.month == now.month;
+          isYear = localDate.year == now.year;
 
-            if (isToday) {
-              todayReceipts++;
-            }
-            if (isMonth) {
-              monthReceipts++;
-            }
+          if (isToday) {
+            todayReceipts++;
+          }
+          if (isMonth) {
+            monthReceipts++;
           }
         }
 
@@ -418,36 +439,34 @@ class DashboardProvider with ChangeNotifier {
             other += amount;
           }
 
-          if (createdAtStr != null) {
-            final date = DateTime.tryParse(createdAtStr);
-            if (date != null) {
-              if (isToday) {
-                today += amount;
-              }
-              if (isMonth) {
-                monthly += amount;
-              }
-              if (isYear) {
-                yearly += amount;
-              }
+          if (parsedDate != null) {
+            final localDate = parsedDate.toLocal();
+            if (isToday) {
+              today += amount;
+            }
+            if (isMonth) {
+              monthly += amount;
+            }
+            if (isYear) {
+              yearly += amount;
+            }
 
-              final diffDays = now.difference(date).inDays;
-              if (diffDays < 7) {
-                final List<String> weekdays = [
-                  'Mon',
-                  'Tue',
-                  'Wed',
-                  'Thu',
-                  'Fri',
-                  'Sat',
-                  'Sun'
-                ];
-                final dayIndex = date.weekday - 1;
-                if (dayIndex >= 0 && dayIndex < 7) {
-                  final dayName = weekdays[dayIndex];
-                  weekdayAmounts[dayName] =
-                      (weekdayAmounts[dayName] ?? 0.0) + amount;
-                }
+            final diffDays = now.difference(localDate).inDays;
+            if (diffDays >= 0 && diffDays < 7) {
+              final List<String> weekdays = [
+                'Mon',
+                'Tue',
+                'Wed',
+                'Thu',
+                'Fri',
+                'Sat',
+                'Sun'
+              ];
+              final dayIndex = localDate.weekday - 1;
+              if (dayIndex >= 0 && dayIndex < 7) {
+                final dayName = weekdays[dayIndex];
+                weekdayAmounts[dayName] =
+                    (weekdayAmounts[dayName] ?? 0.0) + amount;
               }
             }
           }
@@ -479,10 +498,14 @@ class DashboardProvider with ChangeNotifier {
           }
 
           if (date != null) {
-            if (!date.isBefore(startOfToday) && date.isBefore(startOfTomorrow)) {
+            final localDate = date.toLocal();
+            if (localDate.year == now.year &&
+                localDate.month == now.month &&
+                localDate.day == now.day) {
               whatsappToday++;
             }
-            if (!date.isBefore(startOfMonth) && date.isBefore(startOfNextMonth)) {
+            if (localDate.year == now.year &&
+                localDate.month == now.month) {
               whatsappMonth++;
             }
           }
@@ -783,7 +806,7 @@ class ReceiptProvider with ChangeNotifier {
     }
   }
 
-  // Generate Receipt via PostgreSQL Backend API
+  // Generate Receipt via PostgreSQL SaaS API
   Future<Map<String, dynamic>?> createReceipt(
       Map<String, dynamic> receiptData) async {
     _isLoading = true;
@@ -791,51 +814,50 @@ class ReceiptProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final payload = {
-        'donorName': receiptData['donorName'] ?? '',
-        'donorMobile': receiptData['donorMobile'] ?? '',
-        'donorEmail': (receiptData['donorEmail'] != null &&
-                receiptData['donorEmail'].toString().isNotEmpty)
-            ? receiptData['donorEmail']
-            : null,
-        'donorAddress': receiptData['donorAddress'],
-        'amount': receiptData['amount'],
-        'purpose': receiptData['purpose'] ?? 'General Donation',
-        'paymentMode': receiptData['paymentMode'] ?? 'cash',
-        'idempotencyKey': receiptData['idempotencyKey'],
-        'templateId': receiptData['templateId'],
-      };
+      final token = await ApiService.getToken();
+      if (token == null || token.isEmpty) {
+        _errorMessage = 'Authentication required. Please log in to generate receipts.';
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
 
-      final response = await ApiService.post('/receipts', payload);
-      final responseBody = jsonDecode(response.body);
-
-      if (response.statusCode == 201) {
-        final receiptJson = responseBody['receipt'];
-        final upiPayload = responseBody['upiPayload'];
-
+      final response = await ApiService.post('/receipts', receiptData);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        final receiptJson = data['receipt'] as Map<String, dynamic>;
         final newModel = ReceiptModel.fromJson(receiptJson);
+
+        if (newModel.qrCodeValue.isEmpty) {
+          throw Exception("Server returned empty qrCodeValue for new receipt.");
+        }
+
         _receipts.insert(0, newModel);
         _isLoading = false;
         notifyListeners();
 
         return {
           'receipt': receiptJson,
-          'upiPayload': upiPayload != null ? {'qrCode': upiPayload} : null,
+          'upiPayload': data['upiPayload'],
         };
       } else {
-        _errorMessage = responseBody['message'] ?? 'Failed to generate receipt.';
+        try {
+          final errorData = jsonDecode(response.body);
+          _errorMessage = errorData['message'] ?? 'Failed to create receipt.';
+        } catch (_) {
+          _errorMessage = 'Server error (${response.statusCode})';
+        }
         _isLoading = false;
         notifyListeners();
         return null;
       }
     } catch (e) {
       debugPrint('Receipt creation error: $e');
-      _errorMessage = 'Connection error: $e';
+      _errorMessage = 'Failed to generate receipt: $e';
+      _isLoading = false;
+      notifyListeners();
+      return null;
     }
-
-    _isLoading = false;
-    notifyListeners();
-    return null;
   }
 
   // Update Pending Payment to paid
@@ -1114,6 +1136,7 @@ class ReceiptProvider with ChangeNotifier {
           donorMobile: donorMobile,
           collectorName: old.collectorName,
           donorAddress: donorAddress,
+          donorEmail: old.donorEmail,
           headerLogoUrl: old.headerLogoUrl,
           leftSideImageUrl: old.leftSideImageUrl,
           rightSideImageUrl: old.rightSideImageUrl,
@@ -1276,6 +1299,7 @@ class DonorProvider with ChangeNotifier {
   Map<String, dynamic> _donorSummary = {};
   bool _isLoading = false;
   bool _isLookingUp = false;
+  String? _cachedOrgId;
 
   List<DonorModel> get donors => _donors;
   DonorModel? get selectedDonor => _selectedDonor;
@@ -1290,14 +1314,36 @@ class DonorProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final endpoint = search != null && search.isNotEmpty
-          ? '/donors?search=${Uri.encodeComponent(search)}'
-          : '/donors';
-      final response = await ApiService.get(endpoint);
-      if (response.statusCode == 200) {
-        final list = jsonDecode(response.body);
-        if (list is List) {
-          _donors = list.map((d) => DonorModel.fromJson(d)).toList();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        String? orgId = _cachedOrgId;
+        if (orgId == null) {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .get();
+          orgId = userDoc.data()?['organization_id'] ??
+              userDoc.data()?['organizationId'] ??
+              userDoc.data()?['lastSelectedOrgId'];
+          _cachedOrgId = orgId;
+        }
+
+        if (orgId != null) {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('donors')
+              .where('organizationId', isEqualTo: orgId)
+              .get();
+
+          var list = snapshot.docs.map((d) => DonorModel.fromJson(d.data())).toList();
+          if (search != null && search.isNotEmpty) {
+            final s = search.toLowerCase();
+            list = list
+                .where((d) =>
+                    d.name.toLowerCase().contains(s) ||
+                    d.mobile.contains(s))
+                .toList();
+          }
+          _donors = list;
         }
       }
     } catch (e) {
@@ -1319,30 +1365,43 @@ class DonorProvider with ChangeNotifier {
           ? cleanMobile.substring(cleanMobile.length - 10)
           : cleanMobile;
 
-      final response = await ApiService.get('/donors/lookup?mobile=$tenDigit');
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['found'] == true && data['donor'] != null) {
-          final d = data['donor'];
-          _foundDonor = DonorModel(
-            id: d['id'] ?? '',
-            organizationId: '',
-            name: d['name'] ?? '',
-            mobile: d['mobile'] ?? '',
-            email: d['email'],
-            address: d['address'],
-          );
-          _foundDonorStats = {
-            'totalDonations': (d['totalDonations'] is num)
-                ? (d['totalDonations'] as num).toDouble()
-                : 0.0,
-            'donationCount': (d['donationCount'] is num)
-                ? (d['donationCount'] as num).toInt()
-                : 0,
-          };
-          _isLookingUp = false;
-          notifyListeners();
-          return true;
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        String? orgId = _cachedOrgId;
+        if (orgId == null) {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(currentUser.uid)
+              .get();
+          orgId = userDoc.data()?['organization_id'] ??
+              userDoc.data()?['organizationId'] ??
+              userDoc.data()?['lastSelectedOrgId'];
+          _cachedOrgId = orgId;
+        }
+
+        if (orgId != null) {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('donors')
+              .where('organizationId', isEqualTo: orgId)
+              .where('mobile', isEqualTo: tenDigit)
+              .limit(1)
+              .get();
+
+          if (snapshot.docs.isNotEmpty) {
+            final data = snapshot.docs.first.data();
+            _foundDonor = DonorModel.fromJson(data);
+            _foundDonorStats = {
+              'totalDonations': (data['totalDonated'] is num)
+                  ? (data['totalDonated'] as num).toDouble()
+                  : 0.0,
+              'donationCount': (data['donationCount'] is num)
+                  ? (data['donationCount'] as num).toInt()
+                  : 0,
+            };
+            _isLookingUp = false;
+            notifyListeners();
+            return true;
+          }
         }
       }
     } catch (e) {
@@ -1366,6 +1425,7 @@ class DonorProvider with ChangeNotifier {
     _foundDonorStats = {};
     _donorHistory = [];
     _donorSummary = {};
+    _cachedOrgId = null;
     _isLoading = false;
     _isLookingUp = false;
     notifyListeners();
@@ -1483,11 +1543,30 @@ class TemplateProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
     try {
-      final response = await ApiService.get('/templates');
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is List) {
-          _templates = data.map((t) => TemplateModel.fromJson(t)).toList();
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUser.uid)
+            .get();
+        final orgId = userDoc.data()?['organization_id'] ??
+            userDoc.data()?['organizationId'] ??
+            userDoc.data()?['lastSelectedOrgId'];
+
+        if (orgId != null) {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('templates')
+              .where('organizationId', isEqualTo: orgId)
+              .get();
+
+          if (snapshot.docs.isNotEmpty) {
+            _templates = snapshot.docs
+                .map((doc) => TemplateModel.fromJson(doc.data()))
+                .toList();
+            _isLoading = false;
+            notifyListeners();
+            return;
+          }
         }
       }
     } catch (e) {
