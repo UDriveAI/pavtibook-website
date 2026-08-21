@@ -75,73 +75,130 @@ function renderMockScreen(id: string) {
   switch (id) {
     case "receipt":
       return (
-        <div className="space-y-2.5 pt-1 text-[9px] animate-in fade-in duration-300">
-          <div className="flex justify-between items-center border-b border-maroon/10 pb-1.5">
-            <h4 className="font-bold text-maroon text-[10px]">New Receipt (नवीन पावती)</h4>
-            <span className="text-[8px] bg-orange-brand/10 text-orange-brand font-bold px-1.5 py-0.5 rounded">PB-2026</span>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[7.5px] font-bold text-neutral-600">DONOR MOBILE (मोबाईल)</label>
-            <input type="text" value="98234 56789" disabled className="w-full bg-white border border-neutral-300 rounded p-1 text-[9px] font-semibold text-neutral-800 outline-none" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[7.5px] font-bold text-neutral-600">DONOR NAME (नाव)</label>
-            <input type="text" value="Shri. Ramesh Patil" disabled className="w-full bg-white border border-neutral-300 rounded p-1 text-[9px] font-semibold text-neutral-800 outline-none" />
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="space-y-1">
-              <label className="text-[7.5px] font-bold text-neutral-600">AMOUNT (रक्कम ₹)</label>
-              <input type="text" value="₹ 501" disabled className="w-full bg-white border border-neutral-300 rounded p-1 text-[9px] font-black text-maroon outline-none" />
+        <div className="space-y-2 text-[8px] animate-in fade-in duration-300 font-sans">
+          {/* Header Title */}
+          <div className="bg-cream-brand/80 p-1.5 rounded-lg border border-maroon/10 flex justify-between items-center">
+            <div>
+              <p className="font-bold text-maroon text-[9px]">Create Receipt</p>
+              <p className="text-[6.5px] text-neutral-500 font-semibold devanagari">नवीन पावती नोंदणी</p>
             </div>
-            <div className="space-y-1">
-              <label className="text-[7.5px] font-bold text-neutral-600">MODE (पेमेंट)</label>
-              <input type="text" value="Cash / UPI" disabled className="w-full bg-white border border-neutral-300 rounded p-1 text-[9px] font-semibold text-neutral-800 outline-none" />
+            <span className="text-[7px] bg-orange-brand/15 text-orange-brand font-bold px-1.5 py-0.5 rounded">PB-2026</span>
+          </div>
+
+          {/* Donor Mobile with Auto-Lookup */}
+          <div className="space-y-0.5">
+            <label className="text-[7px] font-bold text-neutral-700">DONOR MOBILE (मोबाईल) *</label>
+            <div className="flex bg-white border border-neutral-300 rounded p-1 items-center justify-between shadow-2xs">
+              <div className="flex items-center gap-1">
+                <span className="text-neutral-500 font-bold text-[7px]">+91</span>
+                <span className="font-bold text-neutral-800 text-[8px]">98234 56789</span>
+              </div>
+              <span className="text-[6px] bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded font-bold">Auto-Found ✓</span>
             </div>
           </div>
-          <div className="space-y-1">
-            <label className="text-[7.5px] font-bold text-neutral-600">PURPOSE (कारण)</label>
-            <input type="text" value="Ganpati Vargani 2026" disabled className="w-full bg-white border border-neutral-300 rounded p-1 text-[9px] text-neutral-800 outline-none" />
+
+          {/* Donor Name */}
+          <div className="space-y-0.5">
+            <label className="text-[7px] font-bold text-neutral-700">DONOR NAME (नाव) *</label>
+            <div className="bg-white border border-neutral-300 rounded p-1 text-neutral-900 font-bold text-[8px] shadow-2xs">
+              Shri. Ramesh Patil
+            </div>
           </div>
-          <div className="w-full bg-orange-brand text-white font-bold py-1.5 rounded text-center text-[9px] shadow-sm mt-2 flex items-center justify-center gap-1">
-            <Share2 className="w-3 h-3" />
-            <span>Generate & Share on WhatsApp</span>
+
+          {/* Amount & Quick Chips */}
+          <div className="space-y-1">
+            <div className="flex justify-between items-center">
+              <label className="text-[7px] font-bold text-neutral-700">AMOUNT (रक्कम ₹) *</label>
+              <span className="text-[6.5px] text-neutral-500 font-medium">Cash / UPI</span>
+            </div>
+            <div className="bg-white border border-neutral-300 rounded p-1 text-maroon font-black text-[10px] shadow-2xs">
+              ₹ 501.00
+            </div>
+            {/* Quick Amount Suggestion Chips */}
+            <div className="flex gap-1">
+              {["+101", "+251", "+501", "+1001"].map((amt, i) => (
+                <span key={i} className={`px-1.5 py-0.5 rounded text-[6.5px] font-bold border ${amt === "+501" ? "bg-maroon text-white border-maroon" : "bg-white text-neutral-600 border-neutral-200"}`}>
+                  {amt}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Purpose & Payment Mode */}
+          <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+            <div className="space-y-0.5">
+              <label className="text-[7px] font-bold text-neutral-700">PURPOSE (कारण)</label>
+              <div className="bg-white border border-neutral-300 rounded p-1 text-neutral-800 text-[7px] font-semibold truncate">
+                Ganpati Vargani
+              </div>
+            </div>
+            <div className="space-y-0.5">
+              <label className="text-[7px] font-bold text-neutral-700">PAYMENT MODE</label>
+              <div className="flex bg-neutral-100 p-0.5 rounded border border-neutral-200 text-[6.5px]">
+                <span className="flex-1 bg-white text-maroon font-bold text-center rounded py-0.5 shadow-2xs">UPI</span>
+                <span className="flex-1 text-neutral-500 text-center py-0.5">Cash</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Button */}
+          <div className="bg-orange-brand text-white font-bold py-1.5 rounded-lg text-center text-[8px] shadow-sm mt-1.5 flex items-center justify-center gap-1 tracking-wide">
+            <Share2 className="w-2.5 h-2.5" />
+            <span>GENERATE & SHARE RECEIPT</span>
           </div>
         </div>
       );
+
     case "preview":
       return (
-        <div className="pt-0.5 text-[7px] leading-tight animate-in fade-in duration-300">
+        <div className="pt-0.5 text-[6.5px] leading-tight animate-in fade-in duration-300">
+          {/* Authentic Traditional Receipt Card */}
           <div className="bg-[#FFFDF9] traditional-border p-2 shadow-md relative text-neutral-800">
-            <div className="text-center text-[6px] font-bold text-maroon devanagari">
+            {/* Watermark/Stamp */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-12deg] border border-dashed border-emerald-600 text-emerald-700 font-black text-[7.5px] px-1.5 py-0.5 uppercase tracking-widest pointer-events-none select-none z-10 devanagari">
+              पावती पूर्ण / PAID
+            </div>
+
+            {/* Religious Header */}
+            <div className="text-center text-[5.5px] font-bold text-maroon devanagari">
               ॥ श्री गणेश प्रसन्न ॥
             </div>
-            <div className="text-center font-bold text-maroon text-[8px] tracking-tight mt-0.5">
+
+            {/* Trust Title */}
+            <div className="text-center font-bold text-maroon text-[7.5px] tracking-tight mt-0.5">
               LALBAUGCHA RAJA GANESH UTSAV
             </div>
+            
             <hr className="border-maroon/20 my-1" />
-            <div className="flex justify-between font-bold text-neutral-700 mb-0.5 text-[6.5px]">
-              <span>No: PB-2026-000050</span>
+
+            {/* Serial & Date */}
+            <div className="flex justify-between font-bold text-neutral-700 mb-0.5 text-[6px]">
+              <span>No: PB-2026-000136</span>
               <span>Date: 18 August 2026</span>
             </div>
+
+            {/* Donor Fields */}
             <div className="space-y-0.5 text-neutral-700 font-medium">
               <div>Received with thanks from:</div>
-              <div className="font-bold text-neutral-900 border-b border-dashed border-neutral-300 pb-0.5">
+              <div className="font-bold text-neutral-900 border-b border-dashed border-neutral-300 pb-0.5 text-[7px]">
                 Shri. Ramesh Patil
               </div>
               <div>The sum of Rupees:</div>
-              <div className="font-bold text-neutral-900 border-b border-dashed border-neutral-300 pb-0.5">
-                Five Hundred One Only
+              <div className="font-bold text-neutral-900 border-b border-dashed border-neutral-300 pb-0.5 text-[6.5px]">
+                Five Hundred One Rupees Only
               </div>
-              <div className="flex justify-between items-center pt-0.5 text-[6.5px]">
-                <div>For: <span className="font-bold">Ganpati Vargani</span></div>
-                <div>Mode: <span className="font-bold">UPI (Paid)</span></div>
+              <div className="flex justify-between items-center pt-0.5 text-[6px]">
+                <div>For: <span className="font-bold text-neutral-800">Ganpati Vargani</span></div>
+                <div>Mode: <span className="font-bold text-neutral-800">UPI (Direct Bank)</span></div>
               </div>
             </div>
+
+            {/* Bottom Row */}
             <div className="flex justify-between items-end mt-2 pt-0.5">
-              <div className="bg-maroon/10 border border-maroon text-maroon px-1.5 py-0.5 font-black text-[9px] rounded">
-                ₹ 501/-
+              <div className="bg-maroon/10 border border-maroon text-maroon px-1.5 py-0.5 font-black text-[8px] rounded">
+                ₹ 501.00
               </div>
-              <div className="w-7 h-7 border border-neutral-400 p-0.5 flex items-center justify-center bg-white rounded shadow-sm">
+              <div className="w-6 h-6 border border-neutral-400 p-0.5 flex items-center justify-center bg-white rounded shadow-2xs">
                 <QrCode className="w-full h-full text-neutral-900" />
               </div>
               <div className="text-right text-[5px] text-neutral-600 italic">
@@ -150,104 +207,136 @@ function renderMockScreen(id: string) {
               </div>
             </div>
           </div>
-          <div className="mt-2 bg-emerald-50 border border-emerald-200 p-1 rounded flex items-center gap-1.5 text-emerald-800 text-[6.5px]">
+
+          {/* WhatsApp Push Alert */}
+          <div className="mt-1.5 bg-emerald-50 border border-emerald-200 p-1 rounded-md flex items-center gap-1 text-emerald-800 text-[6px]">
             <CheckCircle className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
             <span>Delivered to Donor&apos;s WhatsApp (+91 98234 56789)</span>
           </div>
         </div>
       );
+
     case "dashboard":
       return (
-        <div className="space-y-2.5 pt-1 text-[8px] animate-in fade-in duration-300">
-          <div className="bg-white p-2.5 rounded-xl border border-maroon/10 shadow-sm text-center">
-            <p className="text-[7.5px] font-bold text-neutral-500 uppercase tracking-wide">Today&apos;s Total Collection</p>
-            <h4 className="text-xl font-black text-maroon">₹ 1,50,500</h4>
-            <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-neutral-100 text-[7.5px] text-neutral-600">
-              <div>Cash: <span className="font-bold text-neutral-800">₹50,000</span></div>
-              <div>UPI: <span className="font-bold text-green-brand">₹1,00,500</span></div>
+        <div className="space-y-2 pt-0.5 text-[7.5px] animate-in fade-in duration-300">
+          {/* Greeting Header */}
+          <div className="px-0.5">
+            <h4 className="font-black text-neutral-900 text-[10px]">Namaste, Rahul</h4>
+            <p className="text-[6.5px] text-neutral-500 font-medium">Lalbaugcha Raja Ganesh Mandal</p>
+          </div>
+
+          {/* Hero Red Action Card */}
+          <div className="bg-maroon text-white p-2 rounded-xl flex items-center gap-2 shadow-sm">
+            <div className="w-8 h-8 rounded-lg bg-white/15 border border-gold-brand/60 flex items-center justify-center text-gold-brand font-black text-base shrink-0">
+              +
+            </div>
+            <div>
+              <p className="font-black text-[9px] leading-tight">Add New Collection</p>
+              <p className="text-[6px] text-cream-brand/80 font-medium">Create and share instant receipt</p>
             </div>
           </div>
 
-          <div className="bg-white p-2 rounded-xl border border-maroon/10 shadow-sm">
-            <div className="flex justify-between items-center text-[7.5px] font-bold text-neutral-600 mb-1">
-              <span>FESTIVAL TOTALS</span>
-              <span className="text-orange-brand">AUGUST 2026</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 text-center">
-              <div className="bg-cream-brand/50 p-1.5 rounded-lg">
-                <p className="text-[6.5px] text-neutral-600">Total Donors</p>
-                <p className="text-xs font-bold text-neutral-800">856</p>
+          {/* Total Collections Card */}
+          <div className="bg-white p-2 rounded-xl border border-neutral-200 shadow-2xs space-y-1.5">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[6.5px] text-neutral-500 font-bold uppercase">Total Collections</p>
+                <h4 className="text-base font-black text-neutral-900">₹ 1,50,005</h4>
               </div>
-              <div className="bg-cream-brand/50 p-1.5 rounded-lg">
-                <p className="text-[6.5px] text-neutral-600">Receipts Issued</p>
-                <p className="text-xs font-bold text-neutral-800">1,245</p>
+              <div className="p-1 rounded bg-cream-brand text-orange-brand">
+                <TrendingUp className="w-3 h-3" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1 pt-1 border-t border-neutral-100 text-[6.5px]">
+              <div className="bg-emerald-50/60 p-1 rounded">
+                <p className="text-neutral-500">Cash (रोख)</p>
+                <p className="font-bold text-neutral-900">₹ 50,000</p>
+              </div>
+              <div className="bg-purple-50/60 p-1 rounded">
+                <p className="text-neutral-500">UPI (बँक)</p>
+                <p className="font-bold text-purple-900">₹ 1,00,005</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-2 rounded-xl border border-maroon/10 shadow-sm space-y-1">
-            <p className="font-bold text-neutral-600 text-[7.5px] uppercase">Recent Receipts</p>
-            {[
-              { name: "Rahul Patil", amount: "₹ 1,000", mode: "UPI" },
-              { name: "Sneha Joshi", amount: "₹ 500", mode: "Cash" },
-              { name: "Amit Sharma", amount: "₹ 2,100", mode: "UPI" }
-            ].map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center py-0.5 border-b border-neutral-50 last:border-0 text-[7.5px]">
-                <span className="font-semibold text-neutral-800">{item.name} ({item.mode})</span>
-                <span className="font-bold text-green-brand">{item.amount}</span>
-              </div>
-            ))}
+          {/* Quick Metrics Grid */}
+          <div className="grid grid-cols-3 gap-1 text-center">
+            <div className="bg-white p-1 rounded-lg border border-neutral-100 shadow-2xs">
+              <p className="text-[5.5px] text-neutral-500">Donors</p>
+              <p className="text-[8px] font-black text-neutral-800">856</p>
+            </div>
+            <div className="bg-white p-1 rounded-lg border border-neutral-100 shadow-2xs">
+              <p className="text-[5.5px] text-neutral-500">Receipts</p>
+              <p className="text-[8px] font-black text-neutral-800">1,245</p>
+            </div>
+            <div className="bg-white p-1 rounded-lg border border-neutral-100 shadow-2xs">
+              <p className="text-[5.5px] text-orange-brand">Pending</p>
+              <p className="text-[8px] font-black text-orange-brand">2 Due</p>
+            </div>
           </div>
         </div>
       );
+
     case "donors":
       return (
-        <div className="space-y-2 pt-1 text-[8px] animate-in fade-in duration-300">
-          <div className="flex justify-between items-center">
-            <h4 className="font-bold text-neutral-800 text-[9px]">Donor Directory</h4>
-            <span className="text-neutral-500 text-[7px] font-semibold">856 Profiles</span>
+        <div className="space-y-1.5 pt-0.5 text-[7.5px] animate-in fade-in duration-300">
+          <div className="flex justify-between items-center px-0.5">
+            <h4 className="font-black text-neutral-900 text-[9px]">Donor Directory</h4>
+            <span className="text-neutral-500 text-[6.5px] font-semibold">856 Registered</span>
           </div>
-          <div className="bg-white p-1 rounded border border-neutral-200 flex items-center justify-between text-[7.5px] mb-1">
-            <span className="text-neutral-400">Search by Name or Mobile...</span>
+
+          {/* Search Box */}
+          <div className="bg-white p-1 rounded-lg border border-neutral-200 flex items-center justify-between text-[6.5px] shadow-2xs">
+            <span className="text-neutral-400">Search by Name / Mobile...</span>
             <Search className="w-2.5 h-2.5 text-neutral-400" />
           </div>
+
+          {/* Donor Cards */}
           <div className="space-y-1">
             {[
               { n: "Kiran R. Deshmukh", p: "+91 98332 11223", a: "₹ 5,000", c: "3 Receipts" },
               { n: "Rajesh S. Thorat", p: "+91 98455 66778", a: "₹ 2,500", c: "2 Receipts" },
               { n: "Anjali M. Kadam", p: "+91 97665 44332", a: "₹ 1,001", c: "1 Receipt" }
             ].map((item, i) => (
-              <div key={i} className="bg-white p-1.5 rounded border border-neutral-100 flex justify-between items-center text-[7.5px]">
-                <div>
-                  <p className="font-bold text-neutral-800">{item.n}</p>
-                  <p className="text-[6.5px] text-neutral-500">{item.p} · {item.c}</p>
+              <div key={i} className="bg-white p-1.5 rounded-lg border border-neutral-100 flex justify-between items-center shadow-2xs">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full bg-maroon/10 text-maroon font-bold flex items-center justify-center text-[7px]">
+                    {item.n[0]}
+                  </div>
+                  <div>
+                    <p className="font-bold text-neutral-900">{item.n}</p>
+                    <p className="text-[6px] text-neutral-500">{item.p} · {item.c}</p>
+                  </div>
                 </div>
-                <span className="font-bold text-green-brand">{item.a}</span>
+                <span className="font-black text-emerald-700">{item.a}</span>
               </div>
             ))}
           </div>
         </div>
       );
+
     case "pending":
       return (
-        <div className="space-y-2 pt-1 text-[8px] animate-in fade-in duration-300">
-          <div className="flex justify-between items-center">
-            <h4 className="font-bold text-neutral-800 text-[9px]">Pending Vargani</h4>
-            <span className="text-orange-brand text-[7px] font-bold">2 Due</span>
+        <div className="space-y-1.5 pt-0.5 text-[7.5px] animate-in fade-in duration-300">
+          <div className="flex justify-between items-center px-0.5">
+            <h4 className="font-black text-neutral-900 text-[9px]">Pending Vargani</h4>
+            <span className="text-orange-brand text-[6.5px] font-bold">2 Due This Week</span>
           </div>
+
+          {/* Pending Cards */}
           <div className="space-y-1.5">
             {[
               { n: "Vikas More (Shop #4)", a: "₹ 5,000", d: "Due 20 Aug" },
               { n: "Santosh G. (Builder)", a: "₹ 11,000", d: "Due 22 Aug" }
             ].map((item, i) => (
-              <div key={i} className="bg-white p-2 rounded-lg border border-neutral-200 flex justify-between items-center shadow-sm text-[7.5px]">
+              <div key={i} className="bg-white p-2 rounded-xl border border-neutral-200 flex justify-between items-center shadow-2xs">
                 <div>
-                  <p className="font-bold text-neutral-800">{item.n}</p>
-                  <p className="text-[6.5px] text-neutral-500 font-semibold">{item.d}</p>
+                  <p className="font-bold text-neutral-900">{item.n}</p>
+                  <p className="text-[6px] text-neutral-500 font-semibold">{item.d}</p>
                 </div>
                 <div className="text-right flex flex-col items-end gap-0.5">
                   <p className="font-black text-orange-brand">{item.a}</p>
-                  <span className="bg-emerald-50 text-emerald-700 px-1 py-0.5 rounded text-[6px] font-bold flex items-center gap-0.5">
+                  <span className="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded text-[6px] font-bold flex items-center gap-0.5 border border-emerald-200">
                     <MessageSquare className="w-2 h-2" /> Remind
                   </span>
                 </div>
@@ -256,6 +345,7 @@ function renderMockScreen(id: string) {
           </div>
         </div>
       );
+
     default:
       return null;
   }
