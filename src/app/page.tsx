@@ -26,7 +26,8 @@ import {
   QrCode,
   Sparkles,
   Shield,
-  Layers
+  Layers,
+  X
 } from "lucide-react";
 import { generateDemoWhatsAppLink, getFormattedWhatsAppDisplay } from "@/lib/whatsapp";
 import { trackWhatsAppClick } from "@/lib/analytics";
@@ -262,6 +263,9 @@ function renderMockScreen(id: string) {
 
 export default function Home() {
   const [activeScreenIndex, setActiveScreenIndex] = useState(0);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
   const [activeFeatureTab, setActiveFeatureTab] = useState<"receipts" | "donors" | "collections" | "management">("receipts");
@@ -756,7 +760,126 @@ export default function Home() {
       </section>
 
       {/* ============================================================ */}
-      {/* 5. HOW IT WORKS (4-STEP WORKFLOW)                            */}
+      {/* 5. APP SCREENSHOTS GALLERY (INSPECT THE APP INTERFACES)      */}
+      {/* ============================================================ */}
+      <section id="screenshots" className="py-16 md:py-24 bg-white scroll-mt-20 overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+            
+            {/* Left: Screen Selectors & Explanations */}
+            <div className="lg:col-span-6 space-y-6">
+              <div className="space-y-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-orange-brand/10 text-orange-brand text-xs font-bold uppercase tracking-wider">
+                  Live App Previews (ॲपचे पडदे)
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-black text-maroon-dark tracking-tight">
+                  Inspect the App Interfaces
+                </h2>
+                <p className="text-sm sm:text-base text-neutral-600 font-medium leading-relaxed">
+                  PavtiBook is optimized for ultra-fast operation in crowded festival pandals. Select any screen below to inspect the actual interface.
+                </p>
+              </div>
+
+              {/* Screen Tab Buttons */}
+              <div className="space-y-3">
+                {screenshotTopics.map((topic, index) => {
+                  const isSelected = galleryIndex === index;
+                  return (
+                    <button
+                      key={topic.id}
+                      onClick={() => setGalleryIndex(index)}
+                      className={`w-full text-left p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between cursor-pointer ${
+                        isSelected
+                          ? "bg-maroon/5 border-maroon shadow-sm ring-1 ring-maroon/20"
+                          : "bg-white border-neutral-200 hover:border-maroon/30 hover:bg-cream-brand/20"
+                      }`}
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <h4 className={`text-sm font-bold ${isSelected ? "text-maroon" : "text-neutral-800"}`}>
+                            {topic.title}
+                          </h4>
+                          <span className="text-xs text-orange-brand font-bold devanagari">
+                            ({topic.subtitle})
+                          </span>
+                        </div>
+                        <p className="text-xs text-neutral-500 font-medium">
+                          {topic.desc}
+                        </p>
+                      </div>
+                      <span className={`w-3 h-3 rounded-full shrink-0 ml-3 ${isSelected ? "bg-maroon" : "bg-neutral-300"}`} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right: Phone Mockup Canvas with Zoom Action */}
+            <div className="lg:col-span-6 flex flex-col items-center gap-5">
+              <div
+                onClick={() => {
+                  setLightboxIndex(galleryIndex);
+                  setLightboxOpen(true);
+                }}
+                className="relative w-full max-w-[310px] aspect-[9/19] bg-neutral-900 rounded-[48px] p-2.5 shadow-2xl border-4 border-neutral-800 cursor-zoom-in hover:scale-[1.02] transition-all duration-300 group"
+              >
+                {/* Speaker Notch */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-5 w-28 bg-neutral-900 rounded-b-2xl z-20 flex items-center justify-center">
+                  <div className="w-10 h-1 bg-neutral-800 rounded-full" />
+                </div>
+
+                {/* Inner Phone Screen */}
+                <div className="relative w-full h-full bg-cream-light rounded-[38px] overflow-hidden flex flex-col border border-neutral-700 select-none">
+                  {/* Status Bar */}
+                  <div className="bg-maroon text-white pt-6 pb-2 px-3.5 flex justify-between items-center text-[9px] font-bold shrink-0">
+                    <span className="text-cream-brand">PavtiBook</span>
+                    <div className="flex items-center gap-1">
+                      <Smartphone className="w-2.5 h-2.5" />
+                      <span className="text-gold-brand">॥ श्री गणेश प्रसन्न ॥</span>
+                    </div>
+                  </div>
+
+                  {/* Dynamic Rendered Content */}
+                  <div className="flex-1 p-3 overflow-y-auto no-scrollbar bg-cream-brand/10">
+                    {renderMockScreen(screenshotTopics[galleryIndex].id)}
+                  </div>
+
+                  {/* Phone Bottom Home Indicator */}
+                  <div className="h-5 w-full flex items-center justify-center shrink-0">
+                    <div className="w-20 h-1 bg-neutral-400 rounded-full" />
+                  </div>
+                </div>
+
+                {/* Hover Zoom Overlay */}
+                <div className="absolute inset-0 bg-maroon/20 opacity-0 group-hover:opacity-100 rounded-[48px] transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+                  <div className="bg-white/95 text-maroon text-xs font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-1.5">
+                    <Search className="w-3.5 h-3.5" />
+                    <span>Click to Zoom Preview</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Slide Indicators */}
+              <div className="flex gap-2">
+                {screenshotTopics.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setGalleryIndex(idx)}
+                    className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                      galleryIndex === idx ? "w-7 bg-maroon" : "w-2 bg-neutral-300 hover:bg-neutral-400"
+                    }`}
+                    aria-label={`Go to screenshot ${idx + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================ */}
+      {/* 6. HOW IT WORKS (4-STEP WORKFLOW)                            */}
       {/* ============================================================ */}
       <section id="how-it-works" className="py-16 md:py-24 bg-white scroll-mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1054,6 +1177,120 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* LIGHTBOX MODAL PREVIEW */}
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 sm:p-6 animate-in fade-in duration-200"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {/* Close Button */}
+          <button
+            onClick={() => setLightboxOpen(false)}
+            className="absolute top-4 right-4 bg-white/15 hover:bg-white/25 text-white rounded-full p-2.5 transition-colors cursor-pointer"
+            aria-label="Close Preview"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          {/* Modal Container */}
+          <div
+            className="relative bg-white rounded-3xl overflow-hidden max-w-3xl w-full grid grid-cols-1 md:grid-cols-12 shadow-2xl border border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Left Phone Preview */}
+            <div className="md:col-span-6 bg-neutral-950 p-6 flex flex-col items-center justify-center min-h-[420px]">
+              <div className="relative w-full max-w-[240px] aspect-[9/19] bg-neutral-900 rounded-[36px] p-2 shadow-xl border-4 border-neutral-800">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 w-16 h-3 bg-neutral-900 rounded-full z-20 flex items-center justify-center">
+                  <div className="w-1 h-1 rounded-full bg-neutral-800 ml-auto mr-2" />
+                </div>
+
+                <div className="relative w-full h-full bg-cream-light rounded-[28px] overflow-hidden flex flex-col border border-neutral-700">
+                  <div className="bg-maroon text-white pt-4 pb-1.5 px-3 flex justify-between items-center text-[7.5px] font-bold shrink-0">
+                    <span>PavtiBook</span>
+                    <div className="flex items-center gap-0.5">
+                      <Smartphone className="w-2 h-2" />
+                      <span>॥ श्री गणेश प्रसन्न ॥</span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 p-2.5 overflow-y-auto no-scrollbar bg-cream-brand/10 select-none">
+                    {renderMockScreen(screenshotTopics[lightboxIndex].id)}
+                  </div>
+                  
+                  <div className="h-4 w-full flex items-center justify-center shrink-0">
+                    <div className="w-16 h-0.5 bg-neutral-400 rounded-full" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Information & Navigation */}
+            <div className="md:col-span-6 p-6 sm:p-8 flex flex-col justify-between bg-cream-brand/20">
+              <div className="space-y-4">
+                <span className="text-[10px] bg-maroon/10 text-maroon font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
+                  Interface Preview {lightboxIndex + 1} of {screenshotTopics.length}
+                </span>
+                
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-black text-maroon-dark">
+                    {screenshotTopics[lightboxIndex].title}
+                  </h3>
+                  <p className="text-xs text-orange-brand font-bold uppercase tracking-wider mt-0.5">
+                    {screenshotTopics[lightboxIndex].subtitle}
+                  </p>
+                </div>
+
+                <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed font-medium">
+                  {screenshotTopics[lightboxIndex].desc}
+                </p>
+
+                <div className="bg-white p-4 rounded-xl border border-maroon/10 space-y-2 text-xs text-neutral-700 font-semibold shadow-xs">
+                  <p className="text-neutral-500 font-bold">Key Benefits (महत्त्वाचे फायदे):</p>
+                  <ul className="space-y-1 text-neutral-600 font-medium">
+                    <li className="flex items-center gap-1.5">✓ Ultra-fast mobile workflow for volunteers</li>
+                    <li className="flex items-center gap-1.5">✓ Zero handwritten calculation errors</li>
+                    <li className="flex items-center gap-1.5">✓ Automated backup to encrypted cloud database</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Navigation Controls */}
+              <div className="flex items-center justify-between pt-6 border-t border-neutral-200 mt-6">
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      setLightboxIndex(
+                        (lightboxIndex - 1 + screenshotTopics.length) % screenshotTopics.length
+                      )
+                    }
+                    className="bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-800 p-2 rounded-lg transition-colors cursor-pointer"
+                    aria-label="Previous screenshot"
+                  >
+                    ←
+                  </button>
+                  <button
+                    onClick={() =>
+                      setLightboxIndex((lightboxIndex + 1) % screenshotTopics.length)
+                    }
+                    className="bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-800 p-2 rounded-lg transition-colors cursor-pointer"
+                    aria-label="Next screenshot"
+                  >
+                    →
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setLightboxOpen(false)}
+                  className="bg-maroon hover:bg-maroon-light text-white font-bold text-xs px-5 py-2.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>
