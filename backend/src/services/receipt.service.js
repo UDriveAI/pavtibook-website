@@ -270,8 +270,18 @@ class ReceiptService {
       };
     }
 
-    const logId = uuidv4();
-    await receiptRepo.createVerificationLog(logId, info.receipt_id, ip, userAgent);
+    // Only log to PostgreSQL when the receipt exists in PostgreSQL (not Firestore-only)
+    if (info.receipt_id) {
+      try {
+        const logId = uuidv4();
+        await receiptRepo.createVerificationLog(logId, info.receipt_id, ip, userAgent);
+      } catch (logErr) {
+        console.warn('[VERIFICATION] Could not write verification log:', logErr.message);
+      }
+    } else {
+      // Firestore-sourced receipt: log to console only
+      console.log(`[VERIFICATION AUDIT] Firestore receipt verified — receiptNumber: ${info.receipt_number}, IP: ${ip}`);
+    }
 
     return {
       isValid: true,
@@ -289,6 +299,7 @@ class ReceiptService {
       message: 'Verified Receipt. This document is authenticated by PavtiBook.',
     };
   }
+
 }
 
 module.exports = new ReceiptService();
