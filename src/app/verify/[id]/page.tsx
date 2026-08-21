@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import VerifyPage from "./VerifyPage";
-import { db } from "@/lib/firebase";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -34,13 +33,21 @@ interface VerificationResult {
 
 /**
  * Firestore direct fallback for pb_ tokens.
- * New receipts from the Flutter Firebase Auth path are saved ONLY to Firestore
- * with a qrCodeValue like "pb_DWIFg2EStIlz_1a024267e0f".
- * The PostgreSQL backend doesn't know about them, so we query Firestore directly here.
+ * Uses FIREBASE_SERVICE_ACCOUNT_JSON (full service account JSON string).
+ * This is more reliable than splitting into 3 env vars (avoids private key parsing issues).
  */
 async function verifyFromFirestore(token: string): Promise<VerificationResult | null> {
-  if (!db) return null;
+  const saJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!saJson) return null;
+
   try {
+    const { initializeApp, cert, getApps, getApp } = await import("firebase-admin/app");
+    const { getFirestore } = await import("firebase-admin/firestore");
+
+    const app = getApps().find(a => a.name === "pavtibook-verify") ??
+      initializeApp({ credential: cert(JSON.parse(saJson)) }, "pavtibook-verify");
+
+    const db = getFirestore(app);
     const snap = await db
       .collection("receipts")
       .where("qrCodeValue", "==", token)
@@ -73,6 +80,7 @@ async function verifyFromFirestore(token: string): Promise<VerificationResult | 
     return null;
   }
 }
+
 
 export default async function Page({ params }: Props) {
   const { id } = await params;
