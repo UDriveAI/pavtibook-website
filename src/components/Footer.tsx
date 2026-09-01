@@ -1,11 +1,18 @@
 import Link from "next/link";
 import Image from "next/image";
 import { MessageSquare, Phone, Mail, Clock, QrCode } from "lucide-react";
-import { generateSupportWhatsAppLink, getFormattedWhatsAppDisplay } from "@/lib/whatsapp";
+import {
+  generateSupportWhatsAppLink,
+  getFormattedWhatsAppDisplay,
+  getFormattedCallDisplay,
+  getCallTelLink,
+} from "@/lib/whatsapp";
 
 export default function Footer() {
   const whatsAppLink = generateSupportWhatsAppLink();
-  const displayPhone = getFormattedWhatsAppDisplay();
+  const displayWhatsApp = getFormattedWhatsAppDisplay();
+  const displayCall = getFormattedCallDisplay();
+  const callTelLink = getCallTelLink();
 
   return (
     <footer className="bg-maroon-dark text-cream-brand/90 border-t border-gold-brand/20">
@@ -125,17 +132,17 @@ export default function Footer() {
                 <div className="p-1.5 rounded-md bg-emerald-600/20 text-emerald-400">
                   <MessageSquare className="w-4 h-4" />
                 </div>
-                <span>WhatsApp: {displayPhone}</span>
+                <span>WhatsApp: {displayWhatsApp}</span>
               </a>
 
               <a
-                href={`tel:+${displayPhone.replace(/[^0-9]/g, "")}`}
+                href={callTelLink}
                 className="flex items-center gap-2.5 hover:text-orange-brand transition-colors duration-200"
               >
                 <div className="p-1.5 rounded-md bg-maroon text-cream-brand">
                   <Phone className="w-4 h-4" />
                 </div>
-                <span>Call: {displayPhone}</span>
+                <span>Call: {displayCall}</span>
               </a>
 
               <a

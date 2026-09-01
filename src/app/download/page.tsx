@@ -91,21 +91,31 @@ export default function DownloadPage() {
 
               {/* Mocks of App Stores */}
               <div className="space-y-3.5">
-                <div className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200 flex items-center justify-between shadow-xs">
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.pavtibook.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-white hover:bg-neutral-50 p-4 sm:p-5 rounded-2xl border border-maroon/20 hover:border-maroon/40 flex items-center justify-between shadow-xs hover:shadow-md transition-all group"
+                >
                   <div className="flex items-center gap-3.5">
-                    <div className="bg-neutral-100 p-2.5 rounded-xl text-neutral-500 shrink-0">
+                    <div className="bg-maroon/10 p-2.5 rounded-xl text-maroon shrink-0 group-hover:scale-105 transition-transform">
                       <Smartphone className="w-5 h-5" />
                     </div>
                     <div>
-                      <h4 className="font-extrabold text-neutral-900 text-sm">Google Play Store</h4>
-                      <p className="text-xs text-neutral-500">For Android smartphones & tablets.</p>
+                      <h4 className="font-extrabold text-neutral-900 text-sm flex items-center gap-2">
+                        <span>Google Play Store</span>
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                          Live Now ✓
+                        </span>
+                      </h4>
+                      <p className="text-xs text-neutral-500">Official Android App on Google Play.</p>
                     </div>
                   </div>
-                  <div className="bg-orange-brand/10 text-orange-brand text-[10px] font-black uppercase px-2.5 py-1 rounded-lg shrink-0 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Coming Soon</span>
+                  <div className="bg-maroon hover:bg-maroon-light text-white text-xs font-bold px-4 py-2 rounded-xl shadow-xs flex items-center gap-1.5 shrink-0 transition-colors">
+                    <span>Install App</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </div>
-                </div>
+                </a>
 
                 <div className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200 flex items-center justify-between shadow-xs">
                   <div className="flex items-center gap-3.5">

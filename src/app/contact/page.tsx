@@ -12,7 +12,12 @@ import {
   Send,
   CheckCircle
 } from "lucide-react";
-import { generateWhatsAppLink, getFormattedWhatsAppDisplay } from "@/lib/whatsapp";
+import {
+  generateWhatsAppLink,
+  getFormattedWhatsAppDisplay,
+  getFormattedCallDisplay,
+  getCallTelLink,
+} from "@/lib/whatsapp";
 import { trackContactSubmit, trackWhatsAppClick } from "@/lib/analytics";
 
 export default function ContactPage() {
@@ -27,8 +32,10 @@ export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const displayPhone = getFormattedWhatsAppDisplay();
-  const whatsAppLink = generateWhatsAppLink("नमस्कार PavtiBook Team, मला माहिती हवी आहे.");
+  const displayWhatsApp = getFormattedWhatsAppDisplay();
+  const displayCall = getFormattedCallDisplay();
+  const callTelLink = getCallTelLink();
+  const whatsAppLink = generateWhatsAppLink("नमस्कार, मला PavtiBook बद्दल माहिती हवी आहे.");
 
   const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +121,7 @@ export default function ContactPage() {
                       Instant coordination and quick replies from our Mandal setup desk.
                     </p>
                     <p className="text-sm font-bold text-neutral-900 pt-1">
-                      {displayPhone}
+                      {displayWhatsApp}
                     </p>
                   </div>
                 </div>
@@ -122,7 +129,10 @@ export default function ContactPage() {
 
               {/* Call Details Card */}
               <div className="bg-white p-6 rounded-2xl border border-maroon/10 shadow-sm space-y-4">
-                <div className="flex gap-4">
+                <a
+                  href={callTelLink}
+                  className="flex gap-4 hover:opacity-90 transition-opacity"
+                >
                   <div className="bg-maroon text-white p-3 rounded-xl shrink-0">
                     <Phone className="w-6 h-6 text-gold-brand" />
                   </div>
@@ -131,11 +141,11 @@ export default function ContactPage() {
                     <p className="text-xs text-neutral-600 font-medium">
                       Call our team for immediate assistance with registration or volunteer logins.
                     </p>
-                    <p className="text-sm font-bold text-neutral-900 pt-1">
-                      {displayPhone}
+                    <p className="text-sm font-bold text-maroon pt-1 hover:underline">
+                      {displayCall}
                     </p>
                   </div>
-                </div>
+                </a>
 
                 <hr className="border-neutral-100" />
 

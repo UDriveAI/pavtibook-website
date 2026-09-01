@@ -86,7 +86,9 @@ export default function PrivacyPage() {
                 <br />
                 <strong>Email:</strong> privacy@pavtibook.online
                 <br />
-                <strong>WhatsApp:</strong> +91 99305 33929
+                <strong>WhatsApp:</strong> +91 96533 33929
+                <br />
+                <strong>Call:</strong> +91 99305 33929
               </p>
             </section>
           </div>

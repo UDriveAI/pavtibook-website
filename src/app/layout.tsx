@@ -109,7 +109,8 @@ export default function RootLayout({
     "url": "https://pavtibook.online",
     "logo": "https://pavtibook.online/images/Pavati-Book-Logo.png",
     "sameAs": [
-      "https://wa.me/919930533929"
+      "https://wa.me/919653333929",
+      "https://play.google.com/store/apps/details?id=com.pavtibook.app"
     ],
     "contactPoint": {
       "@type": "ContactPoint",
