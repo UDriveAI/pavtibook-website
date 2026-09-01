@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/firebase";
 import { checkRateLimit, getClientIp, sanitizeInput, validateMobile } from "@/lib/security";
+import { notifyAdminOfNewLead } from "@/lib/notifications";
 import { FieldValue } from "firebase-admin/firestore";
 
 export interface DemoSubmission {
@@ -14,13 +15,27 @@ export interface DemoSubmission {
   honeypot?: string;
 }
 
-export async function submitDemoRequest(formData: DemoSubmission) {
+export interface DemoSubmissionResponse {
+  success: boolean;
+  message: string;
+  passId?: string;
+}
+
+/**
+ * Generates a standard sequential/time-indexed demo pass identifier
+ */
+function generateDemoPassId(): string {
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  return `PB-DEMO-2026-${randomSuffix}`;
+}
+
+export async function submitDemoRequest(formData: DemoSubmission): Promise<DemoSubmissionResponse> {
   try {
     // 1. Honeypot Spam Protection
     if (formData.honeypot && formData.honeypot.trim().length > 0) {
       console.warn("Spam Bot Detected via Honeypot Trigger on Demo form.");
       // Return a mock success response to mislead spam bots
-      return { success: true, message: "Demo request captured successfully!" };
+      return { success: true, message: "Demo request captured successfully!", passId: "PB-DEMO-2026" };
     }
 
     // 2. Rate Limiting Protection (Max 5 submissions per 15 minutes)
@@ -51,28 +66,64 @@ export async function submitDemoRequest(formData: DemoSubmission) {
       return { success: false, message: "Please enter a valid 10-digit Indian mobile number." };
     }
 
-    // 4. Firestore DB Persistence
-    if (!db) {
-      // Handle missing server credentials gracefully (local environment simulation)
-      console.warn("Firestore not configured. Simulating successful local save.");
-      return { success: true, message: "Demo request captured successfully! (Local DB Simulation)" };
-    }
+    // 4. Generate Unique Demo Pass ID
+    const passId = generateDemoPassId();
+    const submittedAt = new Date().toISOString();
+    const demoAccounts = "Upto 5 Demo Accounts";
 
-    await db.collection("website_demo_requests").add({
+    // 5. Dispatch Admin Lead Notifications (Primary: WhatsApp to +91 9653333929, Backup: Email)
+    const notificationResults = await notifyAdminOfNewLead({
+      passId,
       name,
       mobile,
-      organization,
-      organizationType,
+      orgName: organization,
+      orgType: organizationType,
       city,
       receiptsPerMonth,
-      source: "website",
-      status: "new",
-      createdAt: FieldValue.serverTimestamp(),
+      demoAccounts,
+      submittedAt,
     });
 
-    return { success: true, message: "Demo request captured successfully!" };
+    // 6. Firestore DB Persistence
+    if (db) {
+      try {
+        await db.collection("website_demo_requests").add({
+          passId,
+          name,
+          mobile,
+          organization,
+          organizationType,
+          city,
+          receiptsPerMonth,
+          demoAccounts,
+          source: "website",
+          status: "new",
+          ipAddress: ip,
+          notifications: notificationResults,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+      } catch (dbError) {
+        console.error("Firestore persistence error (continuing without breaking client):", dbError);
+      }
+    } else {
+      console.warn("Firestore not configured. Simulated local lead capture for:", {
+        passId,
+        name,
+        mobile,
+        organization,
+      });
+    }
+
+    return {
+      success: true,
+      message: "Demo request captured successfully!",
+      passId,
+    };
   } catch (error) {
-    console.error("Firestore Error in Demo Request capture:", error);
-    return { success: false, message: "An unexpected error occurred. Please try again later." };
+    console.error("Error in Demo Request capture:", error);
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
   }
 }

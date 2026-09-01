@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Menu, X, ArrowRight, QrCode, MessageSquare } from "lucide-react";
+import { Menu, X, ArrowRight, QrCode, MessageSquare, Smartphone } from "lucide-react";
 import { generateDemoWhatsAppLink } from "@/lib/whatsapp";
 import { trackWhatsAppClick } from "@/lib/analytics";
 
@@ -39,6 +39,7 @@ export default function Header() {
     { name: "How It Works", href: "/#how-it-works" },
     { name: "QR Verification", href: "/#qr-verification" },
     { name: "Pricing", href: "/pricing" },
+    { name: "Download App", href: "/download" },
     { name: "FAQ", href: "/#faq" },
     { name: "Contact", href: "/contact" },
   ];
@@ -69,7 +70,7 @@ export default function Header() {
           </Link>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-7">
+          <nav className="hidden lg:flex items-center gap-6">
             {navLinks.map((link) => {
               const isAnchor = link.href.includes("#");
               const isActive = !isAnchor && pathname === link.href;
@@ -90,10 +91,20 @@ export default function Header() {
           </nav>
 
           {/* Desktop Action CTAs */}
-          <div className="hidden sm:flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2.5">
+            <a
+              href="https://play.google.com/store/apps/details?id=com.pavtibook.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-emerald-800 bg-emerald-100/90 hover:bg-emerald-200/90 border border-emerald-600/30 transition-colors duration-200 shadow-2xs"
+            >
+              <Smartphone className="w-4 h-4 text-emerald-700" />
+              <span>Download App</span>
+            </a>
+
             <Link
               href="/verify"
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold text-maroon hover:bg-maroon/5 border border-maroon/15 transition-colors duration-200"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-maroon hover:bg-maroon/5 border border-maroon/15 transition-colors duration-200"
             >
               <QrCode className="w-4 h-4 text-maroon" />
               <span>Verify Receipt</span>
@@ -101,15 +112,24 @@ export default function Header() {
 
             <Link
               href="/request-demo"
-              className="inline-flex items-center gap-1.5 bg-maroon hover:bg-maroon-light text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm hover:shadow transition-all duration-200 group"
+              className="inline-flex items-center gap-1.5 bg-maroon hover:bg-maroon-light text-white text-xs font-bold px-3.5 py-2 rounded-lg shadow-sm hover:shadow transition-all duration-200 group"
             >
-              <span>Request Free Demo</span>
+              <span>Request Demo</span>
               <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
             </Link>
           </div>
 
           {/* Mobile Menu Hamburger */}
           <div className="lg:hidden flex items-center gap-2">
+            <a
+              href="https://play.google.com/store/apps/details?id=com.pavtibook.app"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-1.5 text-emerald-700 hover:bg-emerald-50 rounded-md"
+              aria-label="Download on Google Play"
+            >
+              <Smartphone className="w-5 h-5" />
+            </a>
             <Link
               href="/verify"
               className="p-1.5 text-maroon hover:bg-maroon/5 rounded-md"
@@ -156,10 +176,21 @@ export default function Header() {
             <hr className="border-maroon/10 my-3" />
 
             <div className="space-y-2.5 pt-1">
+              <a
+                href="https://play.google.com/store/apps/details?id=com.pavtibook.app"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-sm font-bold shadow-md"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>Download App (Google Play)</span>
+              </a>
+
               <Link
                 href="/request-demo"
                 onClick={() => setIsOpen(false)}
-                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-maroon text-white text-sm font-bold shadow-md"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-maroon text-white text-sm font-bold shadow-sm"
               >
                 <span>Request Free Demo</span>
                 <ArrowRight className="w-4 h-4" />
@@ -182,7 +213,7 @@ export default function Header() {
               <Link
                 href="/verify"
                 onClick={() => setIsOpen(false)}
-                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-maroon/20 text-maroon text-xs font-bold hover:bg-maroon/5"
+                className="flex items-center justify-center gap-2 w-full py-2 rounded-xl border border-maroon/20 text-maroon text-xs font-bold hover:bg-maroon/5"
               >
                 <QrCode className="w-4 h-4" />
                 <span>Verify a Receipt Online</span>

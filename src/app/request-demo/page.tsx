@@ -26,6 +26,7 @@ export default function RequestDemoPage() {
 
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [passId, setPassId] = useState("PB-DEMO-2026");
   const [errorMsg, setErrorMsg] = useState("");
 
   const displayPhone = getFormattedWhatsAppDisplay();
@@ -60,6 +61,9 @@ export default function RequestDemoPage() {
       });
 
       if (res.success) {
+        if (res.passId) {
+          setPassId(res.passId);
+        }
         trackDemoRequest(orgName, orgType);
         setSubmitted(true);
       } else {
@@ -111,7 +115,7 @@ export default function RequestDemoPage() {
                 <hr className="border-maroon/20 my-2" />
 
                 <div className="flex justify-between font-bold text-[10px] text-neutral-600">
-                  <span>PASS: PB-DEMO-2026</span>
+                  <span>PASS: {passId}</span>
                   <span>Date: {new Date().toLocaleDateString("en-IN")}</span>
                 </div>
 

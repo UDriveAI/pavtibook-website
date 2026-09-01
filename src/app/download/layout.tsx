@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Download Android App",
-  description: "Get early access to the PavtiBook mobile application. Install the Android APK to manage your Mandal or Trust collections on-the-go.",
+  title: "Download PavtiBook Android App",
+  description: "Download the official PavtiBook Android application from Google Play Store. Manage collections, issue digital receipts, and keep your Mandal records organized.",
 };
 
 export default function DownloadLayout({

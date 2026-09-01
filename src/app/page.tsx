@@ -609,10 +609,20 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-4">
+              <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3.5 pt-4">
+                <a
+                  href="https://play.google.com/store/apps/details?id=com.pavtibook.app"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto bg-white hover:bg-cream-light text-maroon font-bold text-sm sm:text-base px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 border border-gold-brand/40 group"
+                >
+                  <Smartphone className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Get it on Google Play</span>
+                </a>
+
                 <Link
                   href="/request-demo"
-                  className="w-full sm:w-auto bg-orange-brand hover:bg-orange-light text-white font-bold text-sm sm:text-base px-8 py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group"
+                  className="w-full sm:w-auto bg-orange-brand hover:bg-orange-light text-white font-bold text-sm sm:text-base px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 group"
                 >
                   <span>Request Free Demo</span>
                   <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -623,10 +633,10 @@ export default function Home() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => trackWhatsAppClick("hero_whatsapp_primary")}
-                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm sm:text-base px-5 py-3.5 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
                 >
                   <MessageSquare className="w-4 h-4 shrink-0" />
-                  <span>Chat on WhatsApp ({displayPhone})</span>
+                  <span>WhatsApp: {displayPhone}</span>
                 </a>
               </div>
 
