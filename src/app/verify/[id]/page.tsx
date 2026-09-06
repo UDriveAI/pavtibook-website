@@ -33,6 +33,7 @@ interface VerificationResult {
   regNumber?: string;
   isOrganizationVerified?: boolean;
   languageCode?: string;
+  receiptImageUrl?: string;
   message?: string;
   error?: boolean;
 }
@@ -127,6 +128,7 @@ async function verifyFromFirestore(token: string): Promise<VerificationResult | 
       collectorName: str(data.collectorName) || str(data.createdByName),
       isOrganizationVerified: data.isOrganizationVerified === true,
       languageCode: str(data.languageCode) || str(data.language_code) || "mr",
+      receiptImageUrl: str(data.receiptImageUrl) || str(data.receipt_image_url),
       message: "Verified Receipt. This document is authenticated by PavtiBook.",
     };
   } catch (err) {
@@ -139,38 +141,35 @@ async function verifyFromFirestore(token: string): Promise<VerificationResult | 
 export default async function Page({ params }: Props) {
   const { id } = await params;
 
-  // Server-side fetch — credentials never exposed to browser
-  const backendUrl = process.env.BACKEND_API_URL ?? "https://api.pavtibook.online";
+  // 1. Authoritative Firestore check first (bypasses any stale/sample DB cache)
+  let result: VerificationResult | null = await verifyFromFirestore(id);
 
-  let result: VerificationResult;
+  // 2. If not found in Firestore, fallback to backend PostgreSQL API
+  if (!result || (!result.isValid && !result.isDeleted)) {
+    const backendUrl = process.env.BACKEND_API_URL ?? "https://api.pavtibook.online";
+    try {
+      const res = await fetch(
+        `${backendUrl}/api/public/verify/${encodeURIComponent(id)}`,
+        {
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(6000),
+        }
+      );
 
-  try {
-    const res = await fetch(
-      `${backendUrl}/api/public/verify/${encodeURIComponent(id)}`,
-      {
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(8000),
+      if (res.ok) {
+        const apiData = await res.json();
+        if (apiData && apiData.isValid) {
+          result = apiData;
+        }
       }
-    );
-
-    if (!res.ok) {
-      result = { isValid: false, message: "This receipt could not be verified." };
-    } else {
-      result = await res.json();
+    } catch {
+      // ignore
     }
-  } catch {
-    result = { isValid: false, error: true, message: "Verification service temporarily unavailable." };
   }
 
-  // Firestore fallback: if backend didn't find it or if we want to confirm latest state
-  if (!result.isValid) {
-    console.log(`[Verify] Trying Firestore fallback for token: ${id}`);
-    const firestoreResult = await verifyFromFirestore(id);
-    if (firestoreResult) {
-      console.log(`[Verify] Firestore HIT for ${id} — receipt: ${firestoreResult.receiptNumber}, isDeleted: ${firestoreResult.isDeleted}`);
-      result = firestoreResult;
-    }
+  if (!result) {
+    result = { isValid: false, message: "This receipt could not be verified." };
   }
 
   // If receipt is voided/deleted, strictly purge any receipt details from client view

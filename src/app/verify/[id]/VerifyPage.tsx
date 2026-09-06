@@ -19,6 +19,7 @@ interface VerificationResult {
   collectorName?: string;
   isOrganizationVerified?: boolean;
   languageCode?: string;
+  receiptImageUrl?: string;
   message?: string;
   error?: boolean;
 }
@@ -185,6 +186,27 @@ export default function VerifyPage({ token, result }: Props) {
     }
   };
 
+  const handleDownloadJpg = async () => {
+    if (!result.receiptImageUrl) {
+      handlePrint();
+      return;
+    }
+    try {
+      const res = await fetch(result.receiptImageUrl);
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = `${result.receiptNumber || "receipt"}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      window.open(result.receiptImageUrl, "_blank");
+    }
+  };
+
   const handleShare = () => {
     if (typeof window !== "undefined") {
       const url = window.location.href;
@@ -333,14 +355,69 @@ export default function VerifyPage({ token, result }: Props) {
             position: "relative",
           }}
         >
-          {/* Traditional Auspicious Header Banner */}
-          <div
-            style={{
-              background: "#8B1E2D",
-              color: "#FFF2D6",
-              textAlign: "center",
-              padding: "8px 12px",
-              fontSize: "14px",
+          {result.receiptImageUrl ? (
+            <div>
+              {/* Traditional Auspicious Header Banner */}
+              <div
+                style={{
+                  background: "#8B1E2D",
+                  color: "#FFF2D6",
+                  textAlign: "center",
+                  padding: "10px 14px",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  letterSpacing: "1px",
+                  borderBottom: "2px solid #D97706",
+                }}
+              >
+                {L.greeting} · {result.organizationName || "PavtiBook"}
+              </div>
+
+              {/* Authoritative Generated Receipt Image from PavtiBook App */}
+              <div style={{ padding: "12px", background: "#FFFDF9", textAlign: "center" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={result.receiptImageUrl}
+                  alt={`Receipt ${result.receiptNumber || ""}`}
+                  style={{
+                    width: "100%",
+                    height: "auto",
+                    display: "block",
+                    borderRadius: "8px",
+                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: "10px 16px",
+                  background: "#FFFBF2",
+                  borderTop: "1px solid #F3E8D6",
+                  fontSize: "11px",
+                  color: "#78350F",
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  textAlign: "center",
+                }}
+              >
+                <span>🔒</span>
+                <span>{L.footerAudit}</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Traditional Auspicious Header Banner */}
+              <div
+                style={{
+                  background: "#8B1E2D",
+                  color: "#FFF2D6",
+                  textAlign: "center",
+                  padding: "8px 12px",
+                  fontSize: "14px",
               fontWeight: 700,
               letterSpacing: "1.5px",
               borderBottom: "2px solid #D97706",
@@ -611,18 +688,45 @@ export default function VerifyPage({ token, result }: Props) {
               🔒 {L.footerAudit}
             </div>
           </div>
+        </>
+      )}
 
           {/* Action Buttons Bar (no-print) */}
           <div
             className="no-print"
             style={{
               background: "#F8F1E7",
-              padding: "16px 24px",
+              padding: "16px 20px",
               borderTop: "1.5px solid #E5E7EB",
               display: "flex",
-              gap: "12px",
+              gap: "8px",
             }}
           >
+            {result.receiptImageUrl && (
+              <button
+                onClick={handleDownloadJpg}
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  background: "#1E3A8A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "12px 6px",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(30, 58, 138, 0.25)",
+                }}
+              >
+                <span>📥</span>
+                <span>Download JPG</span>
+              </button>
+            )}
+
             <button
               onClick={handlePrint}
               style={{
@@ -630,20 +734,20 @@ export default function VerifyPage({ token, result }: Props) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "8px",
+                gap: "6px",
                 background: "#8B1E2D",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "10px",
-                padding: "12px",
-                fontSize: "14px",
+                padding: "12px 6px",
+                fontSize: "13px",
                 fontWeight: 700,
                 cursor: "pointer",
                 boxShadow: "0 2px 8px rgba(139, 30, 45, 0.25)",
               }}
             >
               <span>📄</span>
-              <span>Download / Print (PDF)</span>
+              <span>PDF / Print</span>
             </button>
 
             <button
@@ -653,20 +757,20 @@ export default function VerifyPage({ token, result }: Props) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "8px",
+                gap: "6px",
                 background: "#25D366",
                 color: "#FFFFFF",
                 border: "none",
                 borderRadius: "10px",
-                padding: "12px",
-                fontSize: "14px",
+                padding: "12px 6px",
+                fontSize: "13px",
                 fontWeight: 700,
                 cursor: "pointer",
                 boxShadow: "0 2px 8px rgba(37, 211, 102, 0.25)",
               }}
             >
               <span>💬</span>
-              <span>Share on WhatsApp</span>
+              <span>WhatsApp</span>
             </button>
           </div>
         </div>
