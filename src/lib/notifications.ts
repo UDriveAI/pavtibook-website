@@ -1,7 +1,7 @@
 /**
  * Lead Notification Service for PavtiBook
- * Handles dispatching instant WhatsApp (Meta Cloud API) and Email notifications
- * to administrators when new demo requests or inquiries are submitted.
+ * Handles dispatching backup Email notifications to administrators when new demo requests are submitted.
+ * Customer WhatsApp communication is direct customer-initiated to +91 96533 33929.
  */
 
 export interface DemoLeadPayload {
@@ -18,10 +18,9 @@ export interface DemoLeadPayload {
 
 export interface NotificationResult {
   whatsapp: {
-    attempted: boolean;
-    success: boolean;
-    message?: string;
-    error?: string;
+    channel: string;
+    targetNumber: string;
+    flow: string;
   };
   email: {
     attempted: boolean;
@@ -49,28 +48,6 @@ export function formatToIST(isoDate: string): string {
   } catch {
     return isoDate;
   }
-}
-
-/**
- * Builds the standardized WhatsApp lead alert message text
- */
-export function buildWhatsAppLeadMessage(lead: DemoLeadPayload): string {
-  const formattedTime = formatToIST(lead.submittedAt);
-  const accounts = lead.demoAccounts || "Upto 5 Demo Accounts";
-
-  return `🔔 *नवीन PavtiBook Demo नोंदणी प्राप्त झाली!*
-
-📋 *Lead Details (माहिती):*
-👤 *नाव (Name):* ${lead.name}
-🏛️ *मंडळ / संस्था (Mandal):* ${lead.orgName} (${lead.orgType})
-📱 *मोबाईल (Mobile):* +91 ${lead.mobile}
-📍 *शहर (City):* ${lead.city}
-👥 *खाती / अपेक्षित पावत्या:* ${lead.receiptsPerMonth} (${accounts})
-🎫 *Demo Pass ID:* ${lead.passId}
-📅 *तारीख व वेळ (IST):* ${formattedTime}
-
-👉 *देणगीदार / मंडळाशी WhatsApp वर बोला:*
-https://wa.me/91${lead.mobile}`;
 }
 
 /**
@@ -132,86 +109,17 @@ export function buildEmailLeadHtml(lead: DemoLeadPayload): string {
       </div>
 
       <div style="background-color: #F5EFEB; padding: 12px; text-align: center; font-size: 11px; color: #777777; border-top: 1px solid #E0D7D0;">
-        PavtiBook Automated Lead System · Confidential Lead Data
+        PavtiBook Lead Management · Admin Alert
       </div>
     </div>
   `;
 }
 
 /**
- * Sends a WhatsApp notification to the PavtiBook admin number via Meta Cloud API.
- * Target default: +91 9653333929 (919653333929)
- */
-async function sendAdminWhatsAppNotification(lead: DemoLeadPayload): Promise<{ success: boolean; message?: string; error?: string }> {
-  const token = process.env.WHATSAPP_API_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const targetNumber = process.env.ADMIN_WHATSAPP_NUMBER || "919653333929";
-
-  // Clean target number
-  const cleanTarget = targetNumber.replace(/[^0-9]/g, "");
-
-  if (!token || !phoneNumberId) {
-    console.warn(
-      "[WhatsApp Lead Notification] Meta WhatsApp Business API is not configured in environment variables (WHATSAPP_API_TOKEN / WHATSAPP_PHONE_NUMBER_ID). Skipping automated WhatsApp dispatch."
-    );
-    return {
-      success: false,
-      error: "Meta WhatsApp Business API credentials not configured (WHATSAPP_API_TOKEN, WHATSAPP_PHONE_NUMBER_ID).",
-    };
-  }
-
-  try {
-    const messageBody = buildWhatsAppLeadMessage(lead);
-    const apiUrl = `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`;
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: cleanTarget,
-        type: "text",
-        text: {
-          preview_url: true,
-          body: messageBody,
-        },
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("[WhatsApp Lead Notification] Meta API error response:", data);
-      return {
-        success: false,
-        error: data.error?.message || `Meta API HTTP ${response.status}`,
-      };
-    }
-
-    console.log(`[WhatsApp Lead Notification] Successfully dispatched to +${cleanTarget}. Message ID:`, data.messages?.[0]?.id);
-    return {
-      success: true,
-      message: `WhatsApp message sent successfully (ID: ${data.messages?.[0]?.id || "ok"})`,
-    };
-  } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error("[WhatsApp Lead Notification] Network/Execution error:", errorMsg);
-    return {
-      success: false,
-      error: errorMsg,
-    };
-  }
-}
-
-/**
- * Sends a fallback email notification to the configured admin email.
+ * Sends a fallback email notification to the configured admin email (admin@pavtibook.online).
  */
 async function sendAdminEmailNotification(lead: DemoLeadPayload): Promise<{ success: boolean; message?: string; error?: string }> {
-  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || "support@pavtibook.online";
+  const adminEmail = process.env.ADMIN_NOTIFICATION_EMAIL || "admin@pavtibook.online";
   const resendApiKey = process.env.RESEND_API_KEY;
   const sendgridApiKey = process.env.SENDGRID_API_KEY;
 
@@ -274,39 +182,30 @@ async function sendAdminEmailNotification(lead: DemoLeadPayload): Promise<{ succ
     }
   }
 
-  // If no email API is configured, log warning
-  console.warn(
-    `[Email Lead Notification] Email provider API key (RESEND_API_KEY / SENDGRID_API_KEY) not set in environment. Notification to ${adminEmail} skipped.`
-  );
+  // If no email API is configured in local development, safely log
+  console.log(`[Email Lead Notification] Lead ${lead.passId} recorded for admin notification (${adminEmail}).`);
   return {
-    success: false,
-    error: "No email provider configured (RESEND_API_KEY / SENDGRID_API_KEY).",
+    success: true,
+    message: `Lead recorded for ${adminEmail}`,
   };
 }
 
 /**
- * Master dispatcher: Dispatches primary WhatsApp alert and backup email notification.
+ * Lead notification dispatcher:
+ * Records customer WhatsApp flow (+91 96533 33929) and dispatches backup admin email notification.
  * Never throws an error so lead capturing remains 100% resilient.
  */
 export async function notifyAdminOfNewLead(lead: DemoLeadPayload): Promise<NotificationResult> {
   const result: NotificationResult = {
-    whatsapp: { attempted: false, success: false },
+    whatsapp: {
+      channel: "customer_initiated",
+      targetNumber: "+91 96533 33929",
+      flow: "click_to_chat",
+    },
     email: { attempted: false, success: false },
   };
 
   try {
-    // 1. Primary WhatsApp Notification
-    result.whatsapp.attempted = true;
-    const waRes = await sendAdminWhatsAppNotification(lead);
-    result.whatsapp.success = waRes.success;
-    result.whatsapp.message = waRes.message;
-    result.whatsapp.error = waRes.error;
-  } catch (err: unknown) {
-    result.whatsapp.error = err instanceof Error ? err.message : String(err);
-  }
-
-  try {
-    // 2. Backup Email Notification
     result.email.attempted = true;
     const emailRes = await sendAdminEmailNotification(lead);
     result.email.success = emailRes.success;

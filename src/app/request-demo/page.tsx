@@ -10,7 +10,8 @@ import {
   User,
   CheckCircle,
   ArrowRight,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from "lucide-react";
 import { generateDemoWhatsAppLink, getFormattedWhatsAppDisplay } from "@/lib/whatsapp";
 import { trackDemoRequest, trackWhatsAppClick } from "@/lib/analytics";
@@ -91,10 +92,10 @@ export default function RequestDemoPage() {
                   <CheckCircle className="w-9 h-9" />
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-maroon-dark">
-                  Demo Booked Successfully!
+                  Demo Pass Generated!
                 </h2>
                 <p className="text-xs sm:text-sm text-neutral-600 font-medium leading-relaxed">
-                  We have generated your demo pass. A PavtiBook specialist will contact you on WhatsApp within 2 hours.
+                  Your demo pass is ready. Tap below to open WhatsApp and send your demo request directly to our team.
                 </p>
               </div>
 
@@ -151,11 +152,14 @@ export default function RequestDemoPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => trackWhatsAppClick("demo_booking_success")}
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm px-6 py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all"
+                  className="inline-flex items-center justify-center gap-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-6 py-4 rounded-xl shadow-md hover:shadow-lg transition-all"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Connect with Specialist on WhatsApp</span>
+                  <MessageSquare className="w-5 h-5" />
+                  <span>Request Demo on WhatsApp ({displayPhone})</span>
                 </a>
+                <p className="text-[11px] text-neutral-500 mt-2">
+                  Opens WhatsApp with pre-filled demo message. Tap Send in WhatsApp to connect.
+                </p>
               </div>
             </div>
           ) : (
@@ -166,17 +170,39 @@ export default function RequestDemoPage() {
               <div className="lg:col-span-5 space-y-6">
                 <div className="space-y-3">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-maroon/10 text-maroon text-xs font-bold uppercase tracking-wider">
-                    Free 15-Min Walkthrough
+                    <Sparkles className="w-3.5 h-3.5 text-maroon" />
+                    <span>Free 15-Min Walkthrough</span>
                   </span>
                   <h1 className="text-3xl sm:text-4xl font-black text-maroon-dark tracking-tight leading-tight">
                     Schedule Your Free Demo
                   </h1>
                   <p className="text-xs sm:text-sm text-neutral-600 font-medium leading-relaxed">
-                    Set up a 15-minute walkthrough with our collection specialists. We will help you configure your Mandal logo, setup UPI QR codes, and onboard volunteers.
+                    Get a live walkthrough with our specialists on WhatsApp. We will show you how to customize your Mandal logo, setup direct UPI QR codes, and issue instant receipts.
                   </p>
                 </div>
 
-                <ul className="space-y-3.5">
+                {/* WhatsApp-First Direct CTA Card */}
+                <div className="bg-gradient-to-br from-emerald-50 via-white to-emerald-50/50 border-2 border-emerald-500/40 p-5 rounded-2xl space-y-3 shadow-xs">
+                  <div className="flex items-center gap-2 text-emerald-800 font-bold text-xs">
+                    <MessageSquare className="w-4 h-4 text-emerald-600" />
+                    <span>Instant WhatsApp Demo (झटपट डेमो)</span>
+                  </div>
+                  <p className="text-xs text-neutral-600 font-medium leading-relaxed">
+                    Prefer direct chat? Tap below to open WhatsApp with a pre-filled demo message.
+                  </p>
+                  <a
+                    href={generateDemoWhatsAppLink()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => trackWhatsAppClick("request_demo_direct_cta")}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    <span>Request Demo on WhatsApp ({displayPhone})</span>
+                  </a>
+                </div>
+
+                <ul className="space-y-3 pt-1">
                   {[
                     "Custom temple / mandal receipt styling",
                     "Multi-volunteer sub-account permissions",
@@ -189,26 +215,18 @@ export default function RequestDemoPage() {
                     </li>
                   ))}
                 </ul>
-
-                <div className="bg-cream-brand/60 border border-maroon/10 p-4 rounded-xl space-y-2">
-                  <p className="text-[10px] text-neutral-500 font-semibold uppercase tracking-wider">Direct Assistance</p>
-                  <a
-                    href={generateDemoWhatsAppLink()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-xs font-bold text-emerald-700 hover:underline"
-                  >
-                    <MessageSquare className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Or chat with us on WhatsApp ({displayPhone})</span>
-                  </a>
-                </div>
               </div>
 
               {/* Form Input Panel */}
               <div className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-maroon/10 shadow-md space-y-5">
-                <h3 className="font-black text-lg text-maroon-dark border-b border-neutral-100 pb-3">
-                  Organization & Contact Details
-                </h3>
+                <div className="border-b border-neutral-100 pb-3 space-y-1">
+                  <h3 className="font-black text-lg text-maroon-dark">
+                    Generate Demo Pass Online
+                  </h3>
+                  <p className="text-xs text-neutral-500">
+                    Fill in your details below to generate your personalized Mandal demo pass.
+                  </p>
+                </div>
 
                 {errorMsg && (
                   <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-semibold border border-red-200">
@@ -354,10 +372,10 @@ export default function RequestDemoPage() {
                     className="w-full bg-maroon hover:bg-maroon-light disabled:opacity-50 text-white font-bold text-xs sm:text-sm py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer"
                   >
                     {loading ? (
-                      <span>Submitting... (नोंदणी होत आहे...)</span>
+                      <span>Generating Pass... (पास तयार होत आहे...)</span>
                     ) : (
                       <>
-                        <span>Submit Free Demo Request</span>
+                        <span>Generate Demo Pass & Request on WhatsApp</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
