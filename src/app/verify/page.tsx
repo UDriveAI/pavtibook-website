@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function VerifySearchPage() {
   const [tokenId, setTokenId] = useState("");
@@ -102,7 +103,7 @@ export default function VerifySearchPage() {
           href="https://pavtibook.online"
           style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "10px" }}
         >
-          <img
+          <Image
             src="/images/Pavati-Book-LogoIcon.png"
             alt="PavtiBook Logo"
             width={44}

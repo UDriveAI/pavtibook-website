@@ -5,6 +5,7 @@ import PromoBanner from "@/components/PromoBanner";
 import WhatsAppButton from "@/components/WhatsAppButton";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import MicrosoftClarity from "@/components/MicrosoftClarity";
+import AppProviders from "@/context/AppProviders";
 import { Suspense } from "react";
 
 const poppins = Poppins({
@@ -214,7 +215,7 @@ export default function RootLayout({
         </Suspense>
         <MicrosoftClarity />
         <PromoBanner />
-        {children}
+        <AppProviders>{children}</AppProviders>
         <WhatsAppButton />
       </body>
     </html>

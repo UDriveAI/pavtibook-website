@@ -77,3 +77,31 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* F19: Clean print rules for receipt-only printing */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  header, footer, nav, button, .no-print {
+    display: none !important;
+  }
+  #pavtibook-traditional-receipt,
+  #pavtibook-traditional-receipt * {
+    visibility: visible;
+  }
+  #pavtibook-traditional-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 4px double #8B1E2D !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+

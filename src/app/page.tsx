@@ -22,7 +22,6 @@ import {
   RefreshCw,
   Search,
   ChevronDown,
-  HelpCircle,
   QrCode,
   Sparkles,
   Shield,
@@ -32,7 +31,6 @@ import {
   Bell,
   Home as HomeIcon,
   PlusCircle,
-  Settings as SettingsIcon,
   Wifi,
   Battery
 } from "lucide-react";
