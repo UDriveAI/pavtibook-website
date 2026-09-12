@@ -146,13 +146,13 @@ export default function Footer() {
               </a>
 
               <a
-                href="mailto:support@pavtibook.online"
+                href="mailto:admin@pavtibook.online"
                 className="flex items-center gap-2.5 hover:text-orange-brand transition-colors duration-200"
               >
                 <div className="p-1.5 rounded-md bg-maroon text-cream-brand">
                   <Mail className="w-4 h-4" />
                 </div>
-                <span>support@pavtibook.online</span>
+                <span>admin@pavtibook.online</span>
               </a>
 
               <div className="flex items-start gap-2.5 pt-1.5 text-cream-brand/65 text-xs">

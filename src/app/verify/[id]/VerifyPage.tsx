@@ -5,6 +5,8 @@ import React from "react";
 interface VerificationResult {
   isValid: boolean;
   isDeleted?: boolean;
+  id?: string;
+  pdfUrl?: string;
   receiptNumber?: string;
   donorName?: string;
   donorMobile?: string;
@@ -33,54 +35,80 @@ const SYSTEM_LABELS: Record<string, Record<string, string>> = {
   mr: {
     greeting: "॥ श्री गणेशाय नमः ॥",
     orgSubtitleFallback: "सार्वजनिक उत्सव मंडळ",
-    receiptBadge: "॥ अधिकृत देणगी पावती ॥ · DONATION RECEIPT",
+    receiptBadge: "॥ अधिकृत देणगी पावती ॥",
     receiptNo: "पावती क्र.:",
     date: "दिनांक:",
-    donorTitle: "देणगीदाराचे नाव (Donor Name):",
+    donorTitle: "देणगीदाराचे नाव:",
     donorPrefix: "श्री / मे. ",
     donorFallback: "श्री / देणगीदार",
-    purpose: "कारण / Purpose:",
+    purpose: "उद्देश / कारण:",
     purposeFallback: "वर्गणी / उत्सव देणगी",
-    paymentMode: "पेमेंट पद्धत / Mode:",
-    amountTitle: "प्राप्त देणगी रक्कम (Contribution Amount)",
+    paymentMode: "पेमेंट पद्धत:",
+    amountTitle: "प्राप्त देणगी रक्कम",
     wordsPrefix: "अक्षरी: ",
-    signaturesTitle: "अधिकृत स्वाक्षऱ्या (Authorized Signatures)",
-    president: "President / अध्यक्ष",
-    treasurer: "Treasurer / कोषाध्यक्ष",
-    secretary: "Secretary / सचिव",
-    sealText: "अधिकृत शिक्का · OFFICIAL SEAL",
-    verifiedBadge: "✓ VERIFIED DIGITAL RECEIPT · PAVTIBOOK",
+    signaturesTitle: "अधिकृत स्वाक्षऱ्या",
+    president: "अध्यक्ष",
+    treasurer: "कोषाध्यक्ष",
+    secretary: "सचिव",
+    authorizedSignatory: "अधिकृत स्वाक्षरी",
+    receiver: "स्वीकारकर्ता",
+    sealText: "अधिकृत शिक्का",
+    verifiedBadge: "✓ अधिकृत डिजिटल पावती · पावतीबुक",
+    orgVerifiedBadge: "✓ पडताळणी पूर्ण",
     thankYou: "आपल्या सहकार्याबद्दल व अमूल्य देणगीबद्दल मनःपूर्वक धन्यवाद! 🙏",
     footerAudit: "ही एक अधिकृत डिजिटल पावती आहे. संगणकीय प्रणालीद्वारे तयार करण्यात आलेली असल्यामुळे यावर प्रत्यक्ष स्वाक्षरीची आवश्यकता नाही.",
     voidTitle: "ही पावती सध्या उपलब्ध नाही",
-    voidSub: "This receipt is no longer available (Voided / Cancelled)",
-    voidDesc: "सदर पावती अधिकृत अधिकाऱ्यांद्वारे रद्द (Voided / Cancelled) करण्यात आली आहे. सुरक्षेच्या नियमांनुसार रद्द केलेल्या पावतीचा तपशील सार्वजनिकरीत्या उपलब्ध केला जात नाही.",
+    voidSub: "सदर पावती रद्द करण्यात आली आहे",
+    voidDesc: "सदर पावती अधिकृत अधिकाऱ्यांद्वारे रद्द करण्यात आली आहे. सुरक्षेच्या नियमांनुसार रद्द केलेल्या पावतीचा तपशील सार्वजनिकरीत्या उपलब्ध केला जात नाही.",
+    voidSecurityNotice: "🔒 अधिकृत सुरक्षा इशारा · पावतीबुक सुरक्षित नोंद",
+    invalidTitle: "अवैध पावती",
+    invalidDesc: "ही पावती पावतीबुक प्रणालीमध्ये सापडली नाही. कृपया लिंक किंवा क्यूआर कोड तपासा.",
+    serverUnavailableTitle: "सेवा तात्पुरती अनुपलब्ध आहे",
+    serverUnavailableDesc: "पडताळणी सर्व्हर तात्पुरता अनुपलब्ध आहे. कृपया काही वेळानंतर प्रयत्न करा.",
+    downloadPdf: "पीडीएफ",
+    downloadJpg: "प्रतिमा (JPG)",
+    print: "प्रिंट",
+    whatsapp: "व्हॉट्सॲप",
+    paid: "प्राप्त",
   },
   hi: {
     greeting: "॥ श्री गणेशाय नमः ॥",
     orgSubtitleFallback: "सार्वजनिक उत्सव मंडल / ट्रस्ट",
-    receiptBadge: "॥ अधिकृत दान रसीद ॥ · DONATION RECEIPT",
+    receiptBadge: "॥ अधिकृत दान रसीद ॥",
     receiptNo: "रसीद क्र.:",
     date: "दिनांक:",
-    donorTitle: "दानदाता का नाम (Donor Name):",
+    donorTitle: "दानदाता का नाम:",
     donorPrefix: "श्री / मे. ",
     donorFallback: "श्री / दानदाता",
-    purpose: "उद्देश्य / Purpose:",
+    purpose: "दान का उद्देश्य:",
     purposeFallback: "दान / उत्सव सहयोग",
-    paymentMode: "भुगतान पद्धति / Mode:",
-    amountTitle: "प्राप्त दान राशि (Donation Amount)",
+    paymentMode: "भुगतान पद्धति:",
+    amountTitle: "प्राप्त दान राशि",
     wordsPrefix: "शब्दों में: ",
-    signaturesTitle: "अधिकृत हस्ताक्षर (Authorized Signatures)",
-    president: "President / अध्यक्ष",
-    treasurer: "Treasurer / कोषाध्यक्ष",
-    secretary: "Secretary / सचिव",
-    sealText: "अधिकृत मुहर · OFFICIAL SEAL",
-    verifiedBadge: "✓ VERIFIED DIGITAL RECEIPT · PAVTIBOOK",
+    signaturesTitle: "अधिकृत हस्ताक्षर",
+    president: "अध्यक्ष",
+    treasurer: "कोषाध्यक्ष",
+    secretary: "सचिव",
+    authorizedSignatory: "अधिकृत हस्ताक्षर",
+    receiver: "प्राप्तकर्ता",
+    sealText: "अधिकृत मुहर",
+    verifiedBadge: "✓ अधिकृत डिजिटल रसीद · पावतीबुक",
+    orgVerifiedBadge: "✓ सत्यापित",
     thankYou: "आपके अमूल्य दान व सहयोग के लिए हार्दिक धन्यवाद! 🙏",
     footerAudit: "यह एक अधिकृत डिजिटल रसीद है। कंप्यूटर प्रणाली द्वारा जनरेट होने के कारण इस पर भौतिक हस्ताक्षर की आवश्यकता नहीं है।",
     voidTitle: "यह रसीद वर्तमान में उपलब्ध नहीं है",
-    voidSub: "This receipt is no longer available (Voided / Cancelled)",
-    voidDesc: "यह रसीद अधिकृत अधिकारियों द्वारा रद्द (Voided / Cancelled) कर दी गई है। सुरक्षा नियमों के अनुसार रद्द की गई रसीद का विवरण सार्वजनिक रूप से नहीं दिखाया जाता।",
+    voidSub: "यह रसीद रद्द कर दी गई है",
+    voidDesc: "यह रसीद अधिकृत अधिकारियों द्वारा रद्द कर दी गई है। सुरक्षा नियमों के अनुसार रद्द की गई रसीद का विवरण सार्वजनिक रूप से नहीं दिखाया जाता।",
+    voidSecurityNotice: "🔒 अधिकृत सुरक्षा सूचना · पावतीबुक सुरक्षित रिकॉर्ड",
+    invalidTitle: "अमान्य रसीद",
+    invalidDesc: "यह रसीद पावतीबुक प्रणाली में नहीं मिली। कृपया लिंक या क्यूआर कोड की जांच करें।",
+    serverUnavailableTitle: "सेवा अस्थायी रूप से अनुपलब्ध है",
+    serverUnavailableDesc: "सत्यापन सर्वर अस्थायी रूप से अनुपलब्ध है। कृपया कुछ समय बाद पुनः प्रयास करें।",
+    downloadPdf: "पीडीएफ",
+    downloadJpg: "फोटो (JPG)",
+    print: "प्रिंट",
+    whatsapp: "व्हाट्सएप",
+    paid: "प्राप्त",
   },
   en: {
     greeting: "॥ Shree Ganeshay Namah ॥",
@@ -100,13 +128,26 @@ const SYSTEM_LABELS: Record<string, Record<string, string>> = {
     president: "President",
     treasurer: "Treasurer",
     secretary: "Secretary",
+    authorizedSignatory: "Authorized Signatory",
+    receiver: "Receiver",
     sealText: "OFFICIAL SEAL",
     verifiedBadge: "✓ VERIFIED DIGITAL RECEIPT · PAVTIBOOK",
+    orgVerifiedBadge: "✓ Verified",
     thankYou: "Thank you for your generous contribution and support! 🙏",
     footerAudit: "This is an authenticated computer-generated digital receipt. No physical signature is required.",
     voidTitle: "This receipt is no longer available",
     voidSub: "This receipt is no longer available (Voided / Cancelled)",
     voidDesc: "This receipt has been voided/cancelled by the authorized organization officer. Details of cancelled receipts are not publicly displayed.",
+    voidSecurityNotice: "🔒 Security Notice · PavtiBook Audit-Safe Record",
+    invalidTitle: "Invalid Receipt",
+    invalidDesc: "This receipt could not be found in the PavtiBook system. Please check the link or QR code.",
+    serverUnavailableTitle: "Service Temporarily Unavailable",
+    serverUnavailableDesc: "The verification server is temporarily unavailable. Please try again later.",
+    downloadPdf: "PDF",
+    downloadJpg: "Download JPG",
+    print: "Print",
+    whatsapp: "WhatsApp",
+    paid: "PAID",
   },
 };
 
@@ -138,16 +179,40 @@ function formatAmount(amount?: number): string {
   }).format(amount);
 }
 
-function formatPaymentMode(mode?: string): string {
-  if (!mode) return "रोख (Cash)";
-  const m = mode.toLowerCase();
-  if (m.includes("cash") || m.includes("रोख")) return "रोख (Cash)";
+function formatPaymentMode(mode?: string, langKey: string = "mr"): string {
+  const m = (mode || "cash").toLowerCase();
+  const isCash = m.includes("cash") || m.includes("रोख") || m.includes("नकद");
+  const isCheque = m.includes("cheque") || m.includes("चेक");
+  const isBank = m.includes("bank") || m.includes("neft") || m.includes("rtgs") || m.includes("imps");
+
+  if (langKey === "mr") {
+    if (isCash) return "रोख";
+    if (isCheque) return "चेक";
+    if (isBank) return "बँक ट्रान्सफर";
+    if (m.includes("upi")) return "UPI";
+    if (m.includes("gpay") || m.includes("google")) return "Google Pay";
+    if (m.includes("phone")) return "PhonePe";
+    return mode || "रोख";
+  }
+
+  if (langKey === "hi") {
+    if (isCash) return "नकद";
+    if (isCheque) return "चेक";
+    if (isBank) return "बैंक ट्रांसफर";
+    if (m.includes("upi")) return "UPI";
+    if (m.includes("gpay") || m.includes("google")) return "Google Pay";
+    if (m.includes("phone")) return "PhonePe";
+    return mode || "नकद";
+  }
+
+  // English fallback
+  if (isCash) return "Cash";
+  if (isCheque) return "Cheque";
+  if (isBank) return "Bank Transfer";
   if (m.includes("upi")) return "UPI";
   if (m.includes("gpay") || m.includes("google")) return "Google Pay";
   if (m.includes("phone")) return "PhonePe";
-  if (m.includes("cheque") || m.includes("चेक")) return "चेक (Cheque)";
-  if (m.includes("bank") || m.includes("neft")) return "Bank Transfer";
-  return mode;
+  return mode || "Cash";
 }
 
 function convertNumberToWords(num: number): string {
@@ -183,6 +248,14 @@ export default function VerifyPage({ token, result }: Props) {
   const handlePrint = () => {
     if (typeof window !== "undefined") {
       window.print();
+    }
+  };
+
+  const handleDownloadPdf = () => {
+    if (result.pdfUrl) {
+      window.open(result.pdfUrl, "_blank");
+    } else {
+      handlePrint();
     }
   };
 
@@ -332,7 +405,7 @@ export default function VerifyPage({ token, result }: Props) {
                 fontWeight: 600,
               }}
             >
-              🔒 अधिकृत सुरक्षा इशारा · PavtiBook Audit-Safe Record
+              {L.voidSecurityNotice}
             </div>
           </div>
         </div>
@@ -464,7 +537,7 @@ export default function VerifyPage({ token, result }: Props) {
                       padding: "1px 8px",
                     }}
                   >
-                    ✓ Verified
+                    {L.orgVerifiedBadge}
                   </span>
                 )}
               </div>
@@ -568,7 +641,7 @@ export default function VerifyPage({ token, result }: Props) {
                     {L.paymentMode}
                   </div>
                   <div style={{ fontSize: "13.5px", fontWeight: 700, color: "#15803D", marginTop: "2px" }}>
-                    {formatPaymentMode(result.paymentMode)} · PAID
+                    {formatPaymentMode(result.paymentMode, langKey)} · {L.paid}
                   </div>
                 </div>
               </div>
@@ -628,7 +701,7 @@ export default function VerifyPage({ token, result }: Props) {
                 >
                   {L.treasurer}
                 </div>
-                <div style={{ fontSize: "10.5px", color: "#6B7280" }}>Authorized Signatory</div>
+                <div style={{ fontSize: "10.5px", color: "#6B7280" }}>{L.authorizedSignatory}</div>
               </div>
 
               {/* Digital Seal Emblem */}
@@ -651,7 +724,7 @@ export default function VerifyPage({ token, result }: Props) {
                   ✓
                 </div>
                 <div style={{ fontSize: "10px", fontWeight: 700, color: "#166534", marginTop: "2px" }}>
-                  AUTHENTIC
+                  {L.sealText}
                 </div>
               </div>
 
@@ -668,7 +741,7 @@ export default function VerifyPage({ token, result }: Props) {
                 >
                   {result.collectorName ?? L.president}
                 </div>
-                <div style={{ fontSize: "10.5px", color: "#6B7280" }}>Receiver</div>
+                <div style={{ fontSize: "10.5px", color: "#6B7280" }}>{L.receiver}</div>
               </div>
             </div>
 
@@ -723,12 +796,12 @@ export default function VerifyPage({ token, result }: Props) {
                 }}
               >
                 <span>📥</span>
-                <span>Download JPG</span>
+                <span>{L.downloadJpg}</span>
               </button>
             )}
 
             <button
-              onClick={handlePrint}
+              onClick={handleDownloadPdf}
               style={{
                 flex: 1,
                 display: "flex",
@@ -747,7 +820,30 @@ export default function VerifyPage({ token, result }: Props) {
               }}
             >
               <span>📄</span>
-              <span>PDF / Print</span>
+              <span>{L.downloadPdf}</span>
+            </button>
+
+            <button
+              onClick={handlePrint}
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                background: "#4B5563",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "10px",
+                padding: "12px 6px",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(75, 85, 99, 0.25)",
+              }}
+            >
+              <span>🖨️</span>
+              <span>{L.print}</span>
             </button>
 
             <button
@@ -770,7 +866,7 @@ export default function VerifyPage({ token, result }: Props) {
               }}
             >
               <span>💬</span>
-              <span>WhatsApp</span>
+              <span>{L.whatsapp}</span>
             </button>
           </div>
         </div>
@@ -795,12 +891,10 @@ export default function VerifyPage({ token, result }: Props) {
         >
           <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚠️</div>
           <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1F2937", margin: "0 0 8px" }}>
-            {isError ? "सेवा तात्पुरती अनुपलब्ध आहे" : "अवैध पावती / Invalid Receipt"}
+            {isError ? L.serverUnavailableTitle : L.invalidTitle}
           </h2>
           <p style={{ fontSize: "13px", color: "#6B7280", margin: "0 0 16px", lineHeight: 1.5 }}>
-            {isError
-              ? "पडताळणी सर्व्हर तात्पुरता अनुपलब्ध आहे. कृपया काही वेळानंतर प्रयत्न करा."
-              : "ही पावती PavtiBook प्रणालीमध्ये सापडली नाही. कृपया लिंक किंवा QR कोड तपासा."}
+            {isError ? L.serverUnavailableDesc : L.invalidDesc}
           </p>
           <div
             style={{

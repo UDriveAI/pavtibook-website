@@ -159,7 +159,7 @@ export default function ContactPage() {
                       Send official trust inquiries, proposals, or documents.
                     </p>
                     <p className="text-xs font-bold text-neutral-800 pt-0.5">
-                      support@pavtibook.online
+                      admin@pavtibook.online
                     </p>
                   </div>
                 </div>

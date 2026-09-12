@@ -84,7 +84,7 @@ export default function PrivacyPage() {
               <p>
                 For data privacy requests or information corrections, please contact our Compliance Officer at:
                 <br />
-                <strong>Email:</strong> privacy@pavtibook.online
+                <strong>Email:</strong> admin@pavtibook.online
                 <br />
                 <strong>WhatsApp:</strong> +91 96533 33929
                 <br />

@@ -17,6 +17,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 interface VerificationResult {
   isValid: boolean;
   isDeleted?: boolean;
+  id?: string;
+  pdfUrl?: string;
   receiptNumber?: string;
   donorName?: string;
   donorMobile?: string;
@@ -40,18 +42,34 @@ interface VerificationResult {
 
 /**
  * Firestore direct fallback for pb_ tokens or direct IDs.
- * Uses FIREBASE_SERVICE_ACCOUNT_JSON (full service account JSON string).
+ * Uses FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_PROJECT_ID / FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY.
  */
 async function verifyFromFirestore(token: string): Promise<VerificationResult | null> {
   const saJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!saJson) return null;
+  const projectId = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+  if (!saJson && (!projectId || !clientEmail || !privateKey)) return null;
 
   try {
     const { initializeApp, cert, getApps } = await import("firebase-admin/app");
     const { getFirestore } = await import("firebase-admin/firestore");
 
+    let credential;
+    if (saJson) {
+      credential = cert(JSON.parse(saJson));
+    } else if (projectId && clientEmail && privateKey) {
+      if (privateKey.includes("\\n")) {
+        privateKey = privateKey.replace(/\\n/g, "\n");
+      }
+      credential = cert({ projectId, clientEmail, privateKey });
+    }
+
+    if (!credential) return null;
+
     const app = getApps().find(a => a.name === "pavtibook-verify") ??
-      initializeApp({ credential: cert(JSON.parse(saJson)) }, "pavtibook-verify");
+      initializeApp({ credential }, "pavtibook-verify");
 
     const db = getFirestore(app);
     let snap = await db
@@ -77,13 +95,17 @@ async function verifyFromFirestore(token: string): Promise<VerificationResult | 
     }
 
     let data: Record<string, unknown> | null = null;
+    let docId: string | null = null;
+
     if (!snap.empty) {
       data = snap.docs[0].data();
+      docId = snap.docs[0].id;
     } else {
       try {
         const docSnap = await db.collection("receipts").doc(token).get();
         if (docSnap.exists) {
           data = docSnap.data() as Record<string, unknown>;
+          docId = docSnap.id;
         }
       } catch {
         // ignore
@@ -111,9 +133,14 @@ async function verifyFromFirestore(token: string): Promise<VerificationResult | 
     const rawAmount = data.amount ?? data.totalAmount ?? 0;
     const amount = typeof rawAmount === "number" ? rawAmount : (typeof rawAmount === "string" ? parseFloat(rawAmount) : 0);
 
+    const actualDocId = docId || str(data.id) || token;
+    const pdfUrl = `https://firebasestorage.googleapis.com/v0/b/pavtibook-7251a.firebasestorage.app/o/receipt_pdfs%2F${encodeURIComponent(actualDocId)}.pdf?alt=media`;
+
     return {
       isValid: true,
       isDeleted: false,
+      id: actualDocId,
+      pdfUrl,
       receiptNumber,
       donorName: str(data.donorName) || str(data.donor_name),
       donorMobile: str(data.donorMobile) || str(data.donor_mobile),
@@ -160,6 +187,10 @@ export default async function Page({ params }: Props) {
       if (res.ok) {
         const apiData = await res.json();
         if (apiData && apiData.isValid) {
+          if (!apiData.pdfUrl && (apiData.id || id)) {
+            const docId = apiData.id || id;
+            apiData.pdfUrl = `https://firebasestorage.googleapis.com/v0/b/pavtibook-7251a.firebasestorage.app/o/receipt_pdfs%2F${encodeURIComponent(docId)}.pdf?alt=media`;
+          }
           result = apiData;
         }
       }
