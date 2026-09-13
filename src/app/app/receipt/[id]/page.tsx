@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, DocumentData } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { useAuth } from "@/context/AuthContext";
 import { useOrg } from "@/context/OrgContext";
@@ -72,7 +72,31 @@ export default function ReceiptDetailsPage() {
       try {
         const receiptRef = doc(db, "receipts", receiptId);
         const snap = await getDoc(receiptRef);
-        if (!snap.exists()) {
+        let data: DocumentData | null = null;
+        let finalDocId = receiptId;
+
+        if (snap.exists()) {
+          data = snap.data();
+          finalDocId = snap.id;
+        } else {
+          // Fallback: search by receiptNumber (e.g., "PB-2026-000076")
+          try {
+            const q = query(
+              collection(db, "receipts"),
+              where("receiptNumber", "==", receiptId)
+            );
+            const qSnap = await getDocs(q);
+            if (!qSnap.empty) {
+              const firstDoc = qSnap.docs[0];
+              data = firstDoc.data();
+              finalDocId = firstDoc.id;
+            }
+          } catch (queryErr) {
+            console.warn("Receipt lookup by receiptNumber failed:", queryErr);
+          }
+        }
+
+        if (!data) {
           if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
             const mockReceipt: ReceiptData = {
               id: receiptId,
@@ -103,9 +127,8 @@ export default function ReceiptDetailsPage() {
           return;
         }
 
-        const data = snap.data();
         const model: ReceiptData = {
-          id: snap.id,
+          id: finalDocId,
           receiptNumber: data.receiptNumber || data.receipt_number || "PB-RECEIPT",
           donorName: data.donorName || data.donor_name || "Donor",
           donorMobile: data.donorMobile || data.donor_mobile || "",

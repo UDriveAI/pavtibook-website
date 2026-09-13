@@ -883,7 +883,7 @@ export default function DashboardPage() {
             {recentReceipts.map((r) => (
               <div
                 key={r.id}
-                onClick={() => router.push(`/app/create-receipt?id=${r.id}`)}
+                onClick={() => router.push(`/app/receipt/${r.id}`)}
                 className="p-3.5 flex items-center justify-between hover:bg-gray-50 cursor-pointer transition"
               >
                 <div className="flex items-center gap-3 min-w-0">

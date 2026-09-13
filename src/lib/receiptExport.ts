@@ -27,6 +27,12 @@ export async function exportReceiptAsJpg(
     quality: 0.95,
     pixelRatio: 2, // High DPI for crystal-clear text
     backgroundColor: "#FFFDD0",
+    width: 1536,
+    height: 1024,
+    style: {
+      transform: "none",
+      transformOrigin: "top left",
+    },
   });
 
   const link = document.createElement("a");
@@ -47,17 +53,21 @@ export async function exportReceiptAsPdf(
   const pngDataUrl = await toPng(element, {
     pixelRatio: 2,
     backgroundColor: "#FFFDD0",
+    width: 1536,
+    height: 1024,
+    style: {
+      transform: "none",
+      transformOrigin: "top left",
+    },
   });
 
-  // Calculate PDF orientation based on aspect ratio
-  const width = element.offsetWidth || 1536;
-  const height = element.offsetHeight || 1024;
-  const isLandscape = width >= height;
+  const width = 1536;
+  const height = 1024;
 
   const pdf = new jsPDF({
-    orientation: isLandscape ? "landscape" : "portrait",
+    orientation: "landscape",
     unit: "pt",
-    format: isLandscape ? [width, height] : [height, width],
+    format: [width, height],
   });
 
   pdf.addImage(pngDataUrl, "PNG", 0, 0, width, height, undefined, "FAST");

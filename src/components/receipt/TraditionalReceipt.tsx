@@ -67,11 +67,12 @@ export interface OrganizationData {
   watermarkOpacity?: number;
 }
 
-interface TraditionalReceiptProps {
+export interface TraditionalReceiptProps {
   receipt: ReceiptData;
   organization: OrganizationData;
   languageCode?: "en" | "mr" | "hi" | string;
   receiptPublicUrl?: string;
+  scale?: number;
 }
 
 export const TraditionalReceipt: React.FC<TraditionalReceiptProps> = ({
@@ -79,7 +80,41 @@ export const TraditionalReceipt: React.FC<TraditionalReceiptProps> = ({
   organization,
   languageCode = "mr",
   receiptPublicUrl,
+  scale: propScale,
 }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [autoScale, setAutoScale] = useState<number>(1);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const updateScale = () => {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const width = rect.width || el.clientWidth;
+      if (width > 0) {
+        setAutoScale(width / 1536);
+      }
+    };
+
+    updateScale();
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(updateScale);
+      ro.observe(el);
+    }
+    window.addEventListener("resize", updateScale);
+
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", updateScale);
+    };
+  }, []);
+
+  const effectiveScale = propScale !== undefined ? propScale : autoScale;
+
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
 
   // Language precedence: explicit prop -> org language -> receipt language -> fallback 'mr'
@@ -351,25 +386,27 @@ export const TraditionalReceipt: React.FC<TraditionalReceiptProps> = ({
   const watermarkOpacity = typeof organization?.watermarkOpacity === "number" ? organization.watermarkOpacity : 0.05;
 
   return (
-    <div className="w-full overflow-hidden flex justify-center items-center select-none print:m-0 print:p-0">
+    <div className="w-full overflow-hidden flex justify-center items-center select-none print:m-0 print:p-0 min-w-0">
       {/* Outer Scaled Viewport Container (Aspect Ratio 1536 : 1024 = 1.50) */}
       <div
-        className="relative w-full aspect-[1536/1024] max-w-[1536px] overflow-hidden"
+        ref={containerRef}
+        className="relative w-full max-w-[1536px] overflow-hidden rounded-2xl mx-auto"
         style={{
-          containerType: "inline-size",
+          aspectRatio: "1536 / 1024",
+          height: effectiveScale < 1 && containerRef.current ? `${Math.round(containerRef.current.clientWidth * (1024 / 1536))}px` : undefined,
         }}
       >
         {/* 
           Master Artboard (1536 x 1024 Fixed Master Units)
-          Scales uniformly based on container width: calc(100cqi / 1536)
+          Scales uniformly based on measured container width
         */}
         <div
           id="pavtibook-traditional-receipt"
-          className="absolute top-0 left-0 bg-[#FFFDF5] text-[#2E1C0C] overflow-hidden"
+          className="absolute top-0 left-0 bg-[#FFFDF5] text-[#2E1C0C] overflow-hidden print:static print:transform-none"
           style={{
             width: "1536px",
             height: "1024px",
-            transform: "scale(calc(100cqi / 1536))",
+            transform: `scale(${effectiveScale})`,
             transformOrigin: "top left",
             borderRadius: "16px",
             border: "2.5px solid #7A1C1C",

@@ -241,7 +241,7 @@ export default function CollectionDetailsPage() {
                 return (
                   <div
                     key={r.id}
-                    onClick={() => router.push(`/app/create-receipt?id=${r.id}`)}
+                    onClick={() => router.push(`/app/receipt/${r.id}`)}
                     className="p-4 bg-white rounded-xl border border-black/5 shadow-xs cursor-pointer hover:border-black/15 transition flex items-center justify-between"
                   >
                     <div className="flex-1 min-w-0 pr-3">

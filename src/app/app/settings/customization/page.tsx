@@ -390,7 +390,7 @@ export default function ReceiptCustomizationPage() {
       {/* Main Grid: Settings Form (Left) & Live Preview (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Column: Customization Controls */}
-        <div className="lg:col-span-6 space-y-6">
+        <div className="lg:col-span-6 min-w-0 space-y-6">
           <form onSubmit={handleSaveAll} className="space-y-6">
             {/* 1. Trust & Organization Details */}
             <div className="bg-white rounded-3xl p-6 border border-neutral-200 shadow-xs space-y-4">
@@ -837,7 +837,7 @@ export default function ReceiptCustomizationPage() {
         </div>
 
         {/* Right Column: Live Interactive Traditional Receipt Preview */}
-        <div className="lg:col-span-6 sticky top-20 space-y-4">
+        <div className="lg:col-span-6 min-w-0 sticky top-20 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-[#8B1E2D]" />
@@ -848,7 +848,7 @@ export default function ReceiptCustomizationPage() {
             </span>
           </div>
 
-          <div className="p-4 bg-neutral-100 rounded-3xl border border-neutral-200/80 shadow-inner overflow-hidden">
+          <div className="p-3 sm:p-4 bg-neutral-100 rounded-3xl border border-neutral-200/80 shadow-inner overflow-hidden flex items-center justify-center min-w-0">
             <TraditionalReceipt
               receipt={previewReceipt}
               organization={previewOrg}
