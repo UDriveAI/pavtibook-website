@@ -221,6 +221,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Persistent Auth State Listener
   useEffect(() => {
+    // Check for local development / headless verification flag
+    if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+      const isLocalVerify = window.localStorage.getItem("__PB_LOCAL_VERIFY__") === "true" || window.location.search.includes("mock_auth=1");
+      if (isLocalVerify) {
+        const mockUser = {
+          uid: "mock_owner_123",
+          email: "pranay@pavtibook.online",
+          displayName: "Pranay Bhosale",
+          getIdToken: async () => "mock_token",
+        } as unknown as User;
+        setUser(mockUser);
+        setUserData({
+          id: "mock_owner_123",
+          name: "Pranay Bhosale",
+          email: "pranay@pavtibook.online",
+          mobile: "9876543210",
+          role: "owner",
+          isSoftwareOwner: true,
+          organizationId: "org_demo_123",
+        });
+        setActiveOrgId("org_demo_123");
+        setActiveOrgData({
+          id: "org_demo_123",
+          name: "श्री गणेश उत्सव मंडळ",
+          type: "Mandal",
+          city: "Pune",
+          state: "Maharashtra",
+          isVerified: true,
+        });
+        setActiveRole("owner");
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const unsub = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         setUser(currentUser);

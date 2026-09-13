@@ -14,6 +14,12 @@
   "use_password": "पासवर्ड से लॉगिन करें",
   "no_account": "खाता नहीं है?",
   "register_here": "संस्था का पंजीकरण करें",
+  "received_invitation": "क्या आपको निमंत्रण मिला है?",
+  "activate_account": "खाता सक्रिय करें",
+  "join_organization": "संस्था से जुड़ें",
+  "join_org_title": "संस्था से जुड़ें / खाता सक्रिय करें",
+  "mobile_or_email": "मोबाइल नंबर या ईमेल",
+  "mobile_or_email_hint": "१० अंकों का मोबाइल या पंजीकृत ईमेल दर्ज करें",
   "org_name_label": "संस्था का नाम",
   "org_type_label": "संस्था का प्रकार",
   "contact_person_label": "संपर्क व्यक्ति",
@@ -64,7 +70,6 @@
   "upload_doc_btn": "केवाईसी दस्तावेज जमा करें",
   "kyc_status": "केवाईसी स्थिति",
   "logout_btn": "लॉगआउट",
-
   "receipt_title": "दान रसीद",
   "receipt_no": "रसीद क्रमांक",
   "date_label": "दिनांक",
@@ -155,5 +160,7 @@
   "custom_purpose_hint": "उदा. स्वास्थ्य शिविर, पुस्तकालय निधि, खेल उपकरण",
   "custom_purpose_required": "कृपया दान का उद्देश्य दर्ज करें",
   "custom_purpose_min_length": "उद्देश्य कम से कम २ अक्षरों का होना चाहिए",
-  "custom_purpose_max_length": "उद्देश्य ६० अक्षरों से अधिक नहीं होना चाहिए"
+  "custom_purpose_max_length": "उद्देश्य ६० अक्षरों से अधिक नहीं होना चाहिए",
+  "existing_account_password_label": "मौजूदा खाते का पासवर्ड",
+  "join_org_btn": "संस्था से जुड़ें"
 }

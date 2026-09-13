@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase-client";
 import { useAuth } from "../../context/AuthContext";
 import { useOrg } from "../../context/OrgContext";
 import { useCollector } from "../../context/CollectorContext";
@@ -33,6 +35,29 @@ export default function DashboardPage() {
 
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportPeriod, setExportPeriod] = useState<string>("today");
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
+
+  // Android Parity: Listen for pending change requests if user is Owner
+  useEffect(() => {
+    if (!activeOrg?.id || !isOwner) {
+      setPendingApprovalsCount(0);
+      return;
+    }
+
+    const q = query(
+      collection(db, "change_requests"),
+      where("organizationId", "==", activeOrg.id),
+      where("status", "==", "pending")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setPendingApprovalsCount(snapshot.size);
+    }, (err) => {
+      console.warn("[DASHBOARD] Change requests listener error:", err);
+    });
+
+    return () => unsubscribe();
+  }, [activeOrg?.id, isOwner]);
 
   const userName = userData?.name || user?.displayName || "";
   const greetingText = userName.trim().length > 0 ? `Namaste, ${userName}` : "Namaste";
@@ -160,6 +185,51 @@ export default function DashboardPage() {
           <span>{t("collector_mode")}</span>
         </button>
       </div>
+
+      {/* ── ARCHIVED BANNER (Parity with Android read-only notice) ── */}
+      {Boolean(activeOrg?.isArchived) && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 text-red-900 shadow-2xs">
+          <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center shrink-0 text-red-700 font-bold">
+            ⚠️
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-red-900">Organization Archived (Read-Only Mode)</h4>
+            <p className="text-xs text-red-700 mt-0.5">
+              This organization has been archived by the owner. New receipts cannot be created. All previous receipts, donors, and records remain fully searchable and preserved.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── PENDING CHANGE REQUESTS BANNER (for Owner - Parity with Android lines 1368-1466) ── */}
+      {isOwner && pendingApprovalsCount > 0 && (
+        <div
+          onClick={() => router.push("/app/approvals")}
+          className="p-3.5 bg-[#FFF3E0] hover:bg-[#FFE8CC] rounded-2xl border-1.5 border-[#F47C20] shadow-2xs flex items-center justify-between cursor-pointer transition group"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#F47C20]/20 flex items-center justify-center text-[#F47C20]">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-[#2E1C0C]">बदल मंजुरी विनंत्या</h4>
+              <p className="text-xs text-gray-700">
+                {pendingApprovalsCount} विनंत्या तुमच्या मंजुरीच्या प्रतीक्षेत आहेत
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-xl bg-[#F47C20] text-white text-xs font-bold shadow-2xs">
+              {pendingApprovalsCount}
+            </span>
+            <svg className="w-5 h-5 text-[#F47C20] group-hover:translate-x-1 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      )}
 
       {/* ── HERO ACTION CARD (Parity with large red Android card) ── */}
       <div

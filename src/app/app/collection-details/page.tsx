@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -21,27 +21,27 @@ export default function CollectionDetailsPage() {
   const title = useMemo(() => {
     switch (type) {
       case "today":
-        return t("todays_collection");
+        return t("todays_collection", "आजची जमा (Today's Collection)");
       case "month":
-        return t("this_month");
+        return t("this_month", "या महिन्याची जमा (This Month)");
       case "year":
-        return t("this_year");
+        return t("this_year", "या वर्षाची जमा (This Year)");
       case "total":
-        return t("total_collection");
+        return t("total_collection", "एकूण जमा (Total Collection)");
       case "cash":
-        return t("cash_collection_report");
+        return t("cash_collection_report", "रोख जमा अहवाल (Cash Report)");
       case "upi":
-        return t("upi_collection_report");
+        return t("upi_collection_report", "UPI जमा अहवाल (UPI Report)");
       case "bank":
-        return t("bank_collection_report");
+        return t("bank_collection_report", "बँक जमा अहवाल (Bank Report)");
       case "cheque":
-        return t("cheque_collection_report");
+        return t("cheque_collection_report", "धनादेश अहवाल (Cheque Report)");
       case "other":
-        return t("other_collection_report");
+        return t("other_collection_report", "इतर जमा अहवाल (Other Report)");
       case "pending":
-        return t("pending_collection_report");
+        return t("pending_collection_report", "प्रलंबित जमा अहवाल (Pending Report)");
       default:
-        return t("collection_details");
+        return t("collection_details", "जमा तपशील (Collection Details)");
     }
   }, [type, t]);
 
@@ -232,7 +232,7 @@ export default function CollectionDetailsPage() {
           /* Detailed receipt list */
           filteredReceipts.length === 0 ? (
             <div className="py-16 text-center text-gray-500">
-              {t("no_receipt_records")}
+              {t("no_receipt_records", "या कालावधीत कोणतीही पावती नोंद आढळली नाही.")}
             </div>
           ) : (
             <div className="space-y-2.5">

@@ -106,6 +106,70 @@ export default function AppProtectedLayout({
             )}
           </div>
 
+          {/* Desktop Navigation Links (Parity with Android Drawer core routes) */}
+          <nav className="hidden lg:flex items-center gap-1">
+            <Link
+              href="/app"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                pathname === "/app"
+                  ? "bg-[#8B1E2D] text-white shadow-2xs"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
+            >
+              {t("nav_dashboard", "Dashboard")}
+            </Link>
+            <Link
+              href="/app/create-receipt"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                pathname === "/app/create-receipt"
+                  ? "bg-[#8B1E2D] text-white shadow-2xs"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
+            >
+              + {t("action_add_receipt", "New Receipt")}
+            </Link>
+            <Link
+              href="/app/receipt-history"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                pathname.startsWith("/app/receipt") && pathname !== "/app/create-receipt"
+                  ? "bg-[#8B1E2D] text-white shadow-2xs"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
+            >
+              {t("action_history", "Receipts")}
+            </Link>
+            <Link
+              href="/app/ledger"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                pathname === "/app/ledger"
+                  ? "bg-[#8B1E2D] text-white shadow-2xs"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
+            >
+              {t("ledger_title", "Ledger")}
+            </Link>
+            <Link
+              href="/app/expense-history"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                pathname.startsWith("/app/expense")
+                  ? "bg-[#8B1E2D] text-white shadow-2xs"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
+            >
+              {t("expense_management", "Expenses")}
+            </Link>
+            <Link
+              href="/app/settings"
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                pathname.startsWith("/app/settings")
+                  ? "bg-[#8B1E2D] text-white shadow-2xs"
+                  : "text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900"
+              }`}
+            >
+              {t("action_admin_settings", "Settings")}
+            </Link>
+          </nav>
+
           <div className="flex items-center gap-2 sm:gap-3">
             <Link
               href="/app/select-org"

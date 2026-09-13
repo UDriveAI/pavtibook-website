@@ -81,7 +81,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h3 className="font-bold text-gray-900 text-sm group-hover:text-[#8B1E2D] transition">
-                {t("nav_subscription")}
+                {t("nav_subscription", "Subscription & Plans")}
               </h3>
               <p className="text-xs text-gray-500">Plan entitlements, quotas, upgrade, and payment history</p>
             </div>
@@ -193,8 +193,8 @@ export default function SettingsPage() {
           <div className="flex items-center gap-3">
             <span className="text-2xl">⚡</span>
             <div>
-              <h2 className="font-bold text-gray-900 text-sm">{t("collector_mode_settings_title")}</h2>
-              <p className="text-xs text-gray-500">{t("collector_mode_settings_desc")}</p>
+              <h2 className="font-bold text-gray-900 text-sm">{t("collector_mode_settings_title", "Collector Mode")}</h2>
+              <p className="text-xs text-gray-500">{t("collector_mode_settings_desc", "Streamlined receipt creation with remembered preferences")}</p>
             </div>
           </div>
           <button
@@ -214,7 +214,7 @@ export default function SettingsPage() {
         {isCollectorMode && (
           <div className="pt-3 border-t border-gray-100 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-700 font-medium">{t("collector_remember_selections")}</span>
+              <span className="text-xs text-gray-700 font-medium">{t("collector_remember_selections", "Remember Selections")}</span>
               <input
                 type="checkbox"
                 checked={rememberSelections}
@@ -223,7 +223,7 @@ export default function SettingsPage() {
               />
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-700 font-medium">{t("collector_auto_next")}</span>
+              <span className="text-xs text-gray-700 font-medium">{t("collector_auto_next", "Auto Next")}</span>
               <input
                 type="checkbox"
                 checked={autoNext}
@@ -236,7 +236,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="bg-white rounded-2xl p-5 border border-black/5 shadow-xs space-y-3">
-        <h2 className="font-bold text-gray-900 text-sm">{t("language")}</h2>
+        <h2 className="font-bold text-gray-900 text-sm">{t("language", "Language")}</h2>
         <div className="grid grid-cols-3 gap-2">
           {[
             { id: "mr", label: "मराठी" },

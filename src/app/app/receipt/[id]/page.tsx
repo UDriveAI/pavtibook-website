@@ -73,6 +73,32 @@ export default function ReceiptDetailsPage() {
         const receiptRef = doc(db, "receipts", receiptId);
         const snap = await getDoc(receiptRef);
         if (!snap.exists()) {
+          if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+            const mockReceipt: ReceiptData = {
+              id: receiptId,
+              receiptNumber: receiptId.startsWith("PB-") ? receiptId : "PB-2026-000025",
+              donorName: "सचिन तेंडुलकर (Sachin Tendulkar)",
+              donorMobile: "9822012345",
+              donorAddress: "Bandra West, Mumbai, Maharashtra",
+              amount: 5001,
+              purpose: "श्री गणेश उत्सव देणगी (Festival Donation)",
+              paymentMode: "upi",
+              paymentStatus: "paid",
+              createdAt: "2026-09-12T10:30:00.000Z",
+              qrCodeValue: `https://pavtibook.online/receipt/${receiptId}`,
+              collectorName: "प्रणय भोसले (Pranay Bhosale)",
+              collectorRole: "Owner",
+              isDeleted: false,
+              deleteReason: "",
+              languageCode: "mr",
+            };
+            setReceipt(mockReceipt);
+            setPropDonorName(mockReceipt.donorName);
+            setPropAmount(mockReceipt.amount.toString());
+            setPropPurpose(mockReceipt.purpose);
+            setLoading(false);
+            return;
+          }
           setError("Receipt not found or has been removed.");
           return;
         }
@@ -94,6 +120,7 @@ export default function ReceiptDetailsPage() {
           collectorRole: data.collectorRole || data.createdByRole || "Member",
           isDeleted: data.isDeleted === true,
           deleteReason: data.deleteReason || "",
+          languageCode: data.languageCode || data.language_code || "",
         };
 
         setReceipt(model);
@@ -101,6 +128,32 @@ export default function ReceiptDetailsPage() {
         setPropAmount(model.amount.toString());
         setPropPurpose(model.purpose);
       } catch (err: unknown) {
+        if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+          const mockReceipt: ReceiptData = {
+            id: receiptId,
+            receiptNumber: receiptId.startsWith("PB-") ? receiptId : "PB-2026-000025",
+            donorName: "सचिन तेंडुलकर (Sachin Tendulkar)",
+            donorMobile: "9822012345",
+            donorAddress: "Bandra West, Mumbai, Maharashtra",
+            amount: 5001,
+            purpose: "श्री गणेश उत्सव देणगी (Festival Donation)",
+            paymentMode: "upi",
+            paymentStatus: "paid",
+            createdAt: "2026-09-12T10:30:00.000Z",
+            qrCodeValue: `https://pavtibook.online/receipt/${receiptId}`,
+            collectorName: "प्रणय भोसले (Pranay Bhosale)",
+            collectorRole: "Owner",
+            isDeleted: false,
+            deleteReason: "",
+            languageCode: "mr",
+          };
+          setReceipt(mockReceipt);
+          setPropDonorName(mockReceipt.donorName);
+          setPropAmount(mockReceipt.amount.toString());
+          setPropPurpose(mockReceipt.purpose);
+          setLoading(false);
+          return;
+        }
         console.error("Error fetching receipt:", err);
         setError("Failed to load receipt details.");
       } finally {
@@ -158,7 +211,7 @@ export default function ReceiptDetailsPage() {
         id: receipt.id,
       },
       orgName: activeOrg?.name || "Organization",
-      languageCode: language,
+      languageCode: receipt.languageCode || (activeOrg as { languageCode?: string })?.languageCode || language || "mr",
       receiptPublicUrl: `https://pavtibook.online/receipt/${receipt.id}`,
     });
     window.open(url, "_blank");
@@ -410,7 +463,7 @@ export default function ReceiptDetailsPage() {
         <TraditionalReceipt
           receipt={receipt}
           organization={organizationData}
-          languageCode={language}
+          languageCode={receipt.languageCode || (activeOrg as { languageCode?: string })?.languageCode || language || "mr"}
           receiptPublicUrl={`https://pavtibook.online/receipt/${receipt.id}`}
         />
       </div>

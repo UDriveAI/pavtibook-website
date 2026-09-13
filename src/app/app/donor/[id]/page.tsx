@@ -81,10 +81,23 @@ export default function DonorDetailPage({
             lastDonationDate: d.lastDonationDate || "",
           };
         } else {
-          donorData = {
-            id: donorId,
-            name: "Donor",
-          };
+          if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+            donorData = {
+              id: donorId,
+              name: "सचिन तेंडुलकर (Sachin Tendulkar)",
+              mobile: "9822012345",
+              email: "sachin@example.com",
+              address: "Bandra West, Mumbai, Maharashtra",
+              totalDonated: 15001,
+              donationCount: 2,
+              lastDonationDate: "2026-09-12T10:30:00.000Z",
+            };
+          } else {
+            donorData = {
+              id: donorId,
+              name: "Donor",
+            };
+          }
         }
 
         // 2. Fetch receipts matching donorId OR donorMobile

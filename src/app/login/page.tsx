@@ -10,7 +10,7 @@ import LanguageSelector from "@/components/LanguageSelector";
 import DeviceLimitModal from "@/components/DeviceLimitModal";
 import { RecaptchaVerifier, ConfirmationResult } from "firebase/auth";
 import { auth } from "@/lib/firebase-client";
-import { LogIn, Phone, KeyRound, AlertCircle, CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
+import { LogIn, Phone, KeyRound, AlertCircle, CheckCircle2, RefreshCw } from "lucide-react";
 
 // Inner component that uses useSearchParams — must be wrapped in Suspense
 function LoginContent() {
@@ -416,16 +416,27 @@ function LoginContent() {
             </div>
           )}
 
-          {/* Register Link */}
-          <div className="pt-2 text-center text-xs font-medium text-neutral-600 border-t border-neutral-100">
-            <span>{t("no_account")} </span>
-            <Link
-              href="/signup"
-              className="text-maroon-dark font-bold hover:underline inline-flex items-center gap-1"
-            >
-              <span>{t("register_here")}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+          {/* Register & Join Links (Exact Parity with Android login_screen.dart lines 560-605) */}
+          <div className="pt-3 text-center text-xs border-t border-neutral-100 space-y-2.5">
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="text-neutral-700 font-medium">Don&apos;t have an account?</span>
+              <Link
+                href="/register-org"
+                className="text-[#8B1E2D] font-bold hover:underline"
+              >
+                Register Now
+              </Link>
+            </div>
+
+            <div className="flex items-center justify-center gap-1.5">
+              <span className="text-neutral-700 font-medium">Received an invitation?</span>
+              <Link
+                href="/join"
+                className="text-[#F47C20] font-bold hover:underline"
+              >
+                Activate Account
+              </Link>
+            </div>
           </div>
         </div>
       </main>

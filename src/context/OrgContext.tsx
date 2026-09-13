@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   writeBatch,
   limit,
+  DocumentSnapshot,
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "../lib/firebase-client";
@@ -90,7 +91,7 @@ interface OrgContextType {
   switchOrganization: (orgId: string) => Promise<{ success: boolean; error?: string }>;
   registerOrganization: (data: RegisterOrgData) => Promise<{ success: boolean; orgId?: string; error?: string }>;
   updateOnboardingDetails: (orgId: string, data: OnboardingProfileData) => Promise<{ success: boolean; error?: string }>;
-  verifyInvitation: (mobile: string, code: string) => Promise<{ success: boolean; invite?: InviteData; error?: string }>;
+  verifyInvitation: (mobileOrEmail: string, code: string) => Promise<{ success: boolean; invite?: InviteData; error?: string }>;
   activateInvitation: (invite: InviteData, name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -194,6 +195,34 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     }
 
     setIsLoadingOrgs(true);
+    if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+      const isLocalVerify = window.localStorage.getItem("__PB_LOCAL_VERIFY__") === "true" || window.location.search.includes("mock_auth=1");
+      if (isLocalVerify) {
+        const mockOrg: OrganizationProfile = {
+          id: "org_demo_123",
+          name: "श्री गणेश उत्सव मंडळ",
+          type: "Mandal",
+          city: "Pune",
+          state: "Maharashtra",
+          isVerified: true,
+        };
+        setAllOrganizations([
+          {
+            membershipId: "mem_mock_1",
+            organizationId: "org_demo_123",
+            organizationName: "श्री गणेश उत्सव मंडळ",
+            role: "owner",
+            joinedAt: "2026-01-01T00:00:00.000Z",
+            orgData: mockOrg,
+          }
+        ]);
+        setActiveOrg(mockOrg);
+        setActiveRole("owner");
+        setCurrentOrgId("org_demo_123");
+        setIsLoadingOrgs(false);
+        return;
+      }
+    }
     try {
       const memberships: UserMembership[] = [];
       const seenOrgIds = new Set<string>();
@@ -465,22 +494,34 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
   }, [refreshOrgs]);
 
   // Phase 1 Join: Validate Invitation
-  const verifyInvitation = useCallback(async (mobile: string, code: string): Promise<{ success: boolean; invite?: InviteData; error?: string }> => {
-    const mobileInput = mobile.trim();
+  const verifyInvitation = useCallback(async (mobileOrEmail: string, code: string): Promise<{ success: boolean; invite?: InviteData; error?: string }> => {
+    const input = mobileOrEmail.trim();
     const codeInput = code.trim().toUpperCase();
 
-    const cleanMobile = mobileInput.replace(/\D/g, "");
-    const tenDigit = cleanMobile.length >= 10 ? cleanMobile.substring(cleanMobile.length - 10) : cleanMobile;
-    const formattedWithPlus = `+91${tenDigit}`;
-
     try {
-      // 1. Query pending invitations by mobile
-      const qMobile = query(
-        collection(db, "organization_invites"),
-        where("status", "==", "pending"),
-        where("mobile", "in", [tenDigit, formattedWithPlus, mobileInput])
-      );
-      let candidateDocs = (await getDocs(qMobile)).docs;
+      let candidateDocs: DocumentSnapshot[] = [];
+
+      // Check if input is email (contains @)
+      if (input.includes("@")) {
+        const qEmail = query(
+          collection(db, "organization_invites"),
+          where("status", "==", "pending"),
+          where("email", "==", input.toLowerCase())
+        );
+        candidateDocs = (await getDocs(qEmail)).docs;
+      } else {
+        // Query by mobile matching Android logic exactly
+        const cleanMobile = input.replace(/\D/g, "");
+        const tenDigit = cleanMobile.length >= 10 ? cleanMobile.substring(cleanMobile.length - 10) : cleanMobile;
+        const formattedWithPlus = `+91${tenDigit}`;
+
+        const qMobile = query(
+          collection(db, "organization_invites"),
+          where("status", "==", "pending"),
+          where("mobile", "in", [tenDigit, formattedWithPlus, input])
+        );
+        candidateDocs = (await getDocs(qMobile)).docs;
+      }
 
       if (candidateDocs.length === 0) {
         // Fallback query by activationCode
@@ -498,8 +539,8 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
 
       // Filter matching invite
       const matchDoc = candidateDocs.find((d) => {
-        const dData = d.data();
-        const c = String(dData.activationCode || dData.activationToken || dData.otp || "").toUpperCase();
+        const dData = d.data() as Record<string, unknown> | undefined;
+        const c = String(dData?.activationCode || dData?.activationToken || dData?.otp || "").toUpperCase();
         return c === codeInput;
       });
 

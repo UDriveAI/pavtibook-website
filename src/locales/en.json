@@ -14,6 +14,12 @@
   "use_password": "Use Password Login",
   "no_account": "Don't have an account?",
   "register_here": "Register Organization",
+  "received_invitation": "Received an invitation?",
+  "activate_account": "Activate Account",
+  "join_organization": "Join Organization",
+  "join_org_title": "Join Organization / Activate Account",
+  "mobile_or_email": "Mobile Number or Email",
+  "mobile_or_email_hint": "Enter 10-digit mobile or registered email",
   "org_name_label": "Organization Name",
   "org_type_label": "Organization Type",
   "contact_person_label": "Contact Person",
@@ -64,7 +70,6 @@
   "upload_doc_btn": "Submit KYC Document",
   "kyc_status": "KYC Status",
   "logout_btn": "Logout",
-
   "receipt_title": "Donation Receipt",
   "receipt_no": "Receipt No.",
   "date_label": "Date",
@@ -155,5 +160,7 @@
   "custom_purpose_hint": "e.g. Medical Camp, Library Fund, Sports Equipment",
   "custom_purpose_required": "Please enter custom contribution purpose",
   "custom_purpose_min_length": "Purpose must be at least 2 characters",
-  "custom_purpose_max_length": "Purpose cannot exceed 60 characters"
+  "custom_purpose_max_length": "Purpose cannot exceed 60 characters",
+  "existing_account_password_label": "Existing Account Password",
+  "join_org_btn": "Join Organization"
 }

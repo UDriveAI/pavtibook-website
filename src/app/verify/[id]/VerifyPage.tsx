@@ -215,26 +215,12 @@ function formatPaymentMode(mode?: string, langKey: string = "mr"): string {
   return mode || "Cash";
 }
 
-function convertNumberToWords(num: number): string {
-  if (num === 0) return "Zero Rupees Only";
-  const a = [
-    "", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
-    "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen",
-    "Seventeen", "Eighteen", "Nineteen",
-  ];
-  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+import { AmountToWordsService } from "@/lib/amountToWords";
 
-  function inWords(n: number): string {
-    if (n < 20) return a[n];
-    if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
-    if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + inWords(n % 100) : "");
-    if (n < 100000) return inWords(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + inWords(n % 1000) : "");
-    if (n < 10000000) return inWords(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + inWords(n % 100000) : "");
-    return inWords(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + inWords(n % 10000000) : "");
-  }
-
-  const integerPart = Math.floor(num);
-  return inWords(integerPart) + " Rupees Only";
+function convertNumberToWords(num: number, lang: string = "mr"): string {
+  if (num === 0) return lang === "en" ? "Zero Rupees Only" : "शून्य रुपये मात्र";
+  const words = AmountToWordsService.convert(num, lang);
+  return words || `${num} रुपये मात्र`;
 }
 
 export default function VerifyPage({ token, result }: Props) {
@@ -674,7 +660,7 @@ export default function VerifyPage({ token, result }: Props) {
                 {formatAmount(result.amount)}
               </div>
               <div style={{ fontSize: "12px", color: "#78350F", fontWeight: 600, fontStyle: "italic" }}>
-                ({L.wordsPrefix}{convertNumberToWords(result.amount ?? 0)})
+                ({L.wordsPrefix}{convertNumberToWords(result.amount ?? 0, langKey)})
               </div>
             </div>
 

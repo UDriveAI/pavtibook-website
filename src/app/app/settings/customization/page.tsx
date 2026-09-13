@@ -29,7 +29,7 @@ export default function ReceiptCustomizationPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { activeOrg, isOwner, isPresident, isTreasurer } = useOrg();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
 
   const orgId = activeOrg?.id;
 
@@ -852,7 +852,7 @@ export default function ReceiptCustomizationPage() {
             <TraditionalReceipt
               receipt={previewReceipt}
               organization={previewOrg}
-              languageCode={language === "hi" ? "hi" : language === "mr" ? "mr" : "en"}
+              languageCode={(activeOrg as { languageCode?: string })?.languageCode || "mr"}
             />
           </div>
 

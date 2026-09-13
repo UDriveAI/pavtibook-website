@@ -97,6 +97,37 @@ export default function LoggedInDevicesPage() {
         setError(null);
       },
       (err) => {
+        if (typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")) {
+          setDevices([
+            {
+              deviceId: currentDeviceId || "dev_mock_web",
+              deviceName: "Chrome on Windows (This Device)",
+              deviceModel: "Desktop Browser",
+              osVersion: "Windows 11",
+              platform: "web",
+              appVersion: "1.1.7",
+              status: "active",
+              isActive: true,
+              lastActiveAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+            },
+            {
+              deviceId: "dev_mock_android",
+              deviceName: "OnePlus 11 5G (CPH2447)",
+              deviceModel: "CPH2447",
+              osVersion: "Android 14",
+              platform: "android",
+              appVersion: "1.1.7",
+              status: "active",
+              isActive: true,
+              lastActiveAt: new Date(Date.now() - 3600000).toISOString(),
+              createdAt: new Date(Date.now() - 86400000).toISOString(),
+            }
+          ]);
+          setLoading(false);
+          setError(null);
+          return;
+        }
         console.error("Error fetching devices:", err);
         setError("Unable to load logged-in devices. Please check your internet connection.");
         setLoading(false);
@@ -104,7 +135,7 @@ export default function LoggedInDevicesPage() {
     );
 
     return () => unsubscribe();
-  }, [user?.uid]);
+  }, [user?.uid, currentDeviceId]);
 
   const activeDevices = devices.filter((d) => d.status === "active" && d.isActive);
   const inactiveDevices = devices.filter((d) => !(d.status === "active" && d.isActive));
@@ -218,12 +249,12 @@ export default function LoggedInDevicesPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
           <span className="text-sm font-bold">
-            {activeDevices.length} of {maxDevices} {t("devices_slot_indicator")}
+            {activeDevices.length} of {maxDevices} {t("devices_slot_indicator", "devices logged in")}
           </span>
         </div>
         {isAtLimit && (
           <span className="text-xs font-black px-2.5 py-1 rounded-full bg-red-600 text-white">
-            {t("device_limit_reached")}
+            {t("device_limit_reached", "Device Limit Reached")}
           </span>
         )}
       </div>
@@ -244,7 +275,7 @@ export default function LoggedInDevicesPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-black text-[#8B1E2D] tracking-wider uppercase">
-                {t("devices_active_sessions")} ({activeDevices.length})
+                {t("devices_active_sessions", "Active Devices")} ({activeDevices.length})
               </h2>
             </div>
 

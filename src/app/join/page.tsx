@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useOrg, InviteData } from "@/context/OrgContext";
@@ -16,9 +15,10 @@ export default function JoinOrgPage() {
 
   const [isInviteVerified, setIsInviteVerified] = useState(false);
   const [verifiedInvite, setVerifiedInvite] = useState<InviteData | null>(null);
+  const [isExistingAccount, setIsExistingAccount] = useState(false);
 
   // Phase 1 State
-  const [mobile, setMobile] = useState("");
+  const [mobileOrEmail, setMobileOrEmail] = useState("");
   const [activationCode, setActivationCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
 
@@ -38,10 +38,20 @@ export default function JoinOrgPage() {
     if (isVerifying) return;
     setErrorMessage(null);
 
-    const cleanMobile = mobile.replace(/\D/g, "");
-    if (cleanMobile.length < 10) {
-      setErrorMessage("Please enter a valid 10-digit mobile number.");
-      return;
+    const input = mobileOrEmail.trim();
+    const isEmail = input.includes("@");
+
+    if (isEmail) {
+      if (!input.includes(".") || input.length < 5) {
+        setErrorMessage("Please enter a valid email address.");
+        return;
+      }
+    } else {
+      const cleanMobile = input.replace(/\D/g, "");
+      if (cleanMobile.length < 10) {
+        setErrorMessage("Please enter a valid 10-digit mobile number or email address.");
+        return;
+      }
     }
 
     const cleanCode = activationCode.trim().toUpperCase();
@@ -51,13 +61,14 @@ export default function JoinOrgPage() {
     }
 
     setIsVerifying(true);
-    const res = await verifyInvitation(cleanMobile.slice(-10), cleanCode);
+    const queryInput = isEmail ? input.toLowerCase() : input.replace(/\D/g, "").slice(-10);
+    const res = await verifyInvitation(queryInput, cleanCode);
     setIsVerifying(false);
 
     if (res.success && res.invite) {
       setVerifiedInvite(res.invite);
       setName(res.invite.name || "");
-      setEmail(res.invite.email || "");
+      setEmail(res.invite.email || (isEmail ? input.toLowerCase() : ""));
       setIsInviteVerified(true);
       setSuccessMessage(`Invitation verified for ${res.invite.name || "Member"}! Please set up your password to activate your account.`);
     } else {
@@ -71,7 +82,7 @@ export default function JoinOrgPage() {
     if (isActivating || !verifiedInvite) return;
     setErrorMessage(null);
 
-    if (!name.trim()) {
+    if (!isExistingAccount && !name.trim()) {
       setErrorMessage("Please enter your full name.");
       return;
     }
@@ -91,7 +102,26 @@ export default function JoinOrgPage() {
     if (res.success) {
       router.push("/app");
     } else {
-      setErrorMessage(res.error || "Failed to activate member account.");
+      const err = res.error || "Failed to activate member account.";
+      if (err.includes("already exists") || err.includes("existing password")) {
+        setIsExistingAccount(true);
+      }
+      setErrorMessage(err);
+    }
+  };
+
+  const handleBack = () => {
+    if (isInviteVerified) {
+      setIsInviteVerified(false);
+      setIsExistingAccount(false);
+      setErrorMessage(null);
+      setSuccessMessage(null);
+      return;
+    }
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push("/login");
     }
   };
 
@@ -100,9 +130,14 @@ export default function JoinOrgPage() {
       {/* Header */}
       <header className="bg-white border-b border-stone-200 px-4 sm:px-8 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link href="/onboarding" className="p-1.5 text-stone-500 hover:text-stone-800 rounded-lg hover:bg-stone-100 transition">
+          <button
+            type="button"
+            onClick={handleBack}
+            className="p-1.5 text-stone-500 hover:text-stone-800 rounded-lg hover:bg-stone-100 transition cursor-pointer"
+            aria-label="Back"
+          >
             <ArrowLeft className="w-5 h-5" />
-          </Link>
+          </button>
           <Image
             src="/images/logo.png"
             alt="PavtiBook"
@@ -126,10 +161,14 @@ export default function JoinOrgPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-stone-900">
-                {t("join_title", "Activate Account & Join")}
+                {isExistingAccount
+                  ? t("join_org_card_title", "Join Organization")
+                  : t("join_title", "Activate Account & Join")}
               </h1>
               <p className="text-xs text-stone-500">
-                {isInviteVerified
+                {isExistingAccount
+                  ? `Joining as ${(verifiedInvite?.role || "member").toUpperCase()} with your existing account`
+                  : isInviteVerified
                   ? `Joining as ${(verifiedInvite?.role || "member").toUpperCase()}`
                   : t("join_step1_desc", "Enter your registered Mobile Number and 6-character Activation Code.")}
               </p>
@@ -155,23 +194,26 @@ export default function JoinOrgPage() {
           {/* PHASE 1: Verify Invitation */}
           {!isInviteVerified ? (
             <form onSubmit={handleVerify} className="space-y-4">
-              {/* Mobile Number */}
+              {/* Mobile Number or Email */}
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  {t("mobile_label", "Mobile Number")} *
+                  {t("mobile_or_email", "Mobile Number or Email")} *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
-                    <Phone className="w-4 h-4" />
+                    {mobileOrEmail.includes("@") ? (
+                      <Mail className="w-4 h-4" />
+                    ) : (
+                      <Phone className="w-4 h-4" />
+                    )}
                   </div>
                   <input
-                    type="tel"
+                    type="text"
                     required
-                    maxLength={10}
                     disabled={isVerifying}
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
-                    placeholder="10-digit mobile number"
+                    value={mobileOrEmail}
+                    onChange={(e) => setMobileOrEmail(e.target.value)}
+                    placeholder={t("mobile_or_email_hint", "Enter 10-digit mobile or registered email")}
                     className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8B1E2D] focus:border-transparent text-sm text-stone-900"
                   />
                 </div>
@@ -216,30 +258,44 @@ export default function JoinOrgPage() {
                   )}
                 </button>
               </div>
+
+              {/* Link back to login */}
+              <div className="pt-2 text-center text-xs font-medium text-stone-500">
+                <span>{t("already_have_account", "Already have an account?")} </span>
+                <button
+                  type="button"
+                  onClick={() => router.push("/login")}
+                  className="text-maroon-dark font-bold hover:underline"
+                >
+                  {t("login_btn", "Login")}
+                </button>
+              </div>
             </form>
           ) : (
             /* PHASE 2: Activate Member Account */
             <form onSubmit={handleActivate} className="space-y-4">
               {/* Full Name */}
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  {t("full_name_label", "Full Name")} *
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
-                    <User className="w-4 h-4" />
+              {!isExistingAccount && (
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    {t("full_name_label", "Full Name")} *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="text"
+                      required={!isExistingAccount}
+                      disabled={isActivating}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your Full Name"
+                      className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8B1E2D] focus:border-transparent text-sm text-stone-900"
+                    />
                   </div>
-                  <input
-                    type="text"
-                    required
-                    disabled={isActivating}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your Full Name"
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8B1E2D] focus:border-transparent text-sm text-stone-900"
-                  />
                 </div>
-              </div>
+              )}
 
               {/* Email */}
               <div>
@@ -253,11 +309,13 @@ export default function JoinOrgPage() {
                   <input
                     type="email"
                     required
-                    disabled={isActivating}
+                    disabled={isActivating || isExistingAccount}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="member@example.com"
-                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8B1E2D] focus:border-transparent text-sm text-stone-900"
+                    className={`w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8B1E2D] focus:border-transparent text-sm text-stone-900 ${
+                      isExistingAccount ? "bg-stone-100 text-stone-600 cursor-not-allowed" : ""
+                    }`}
                   />
                 </div>
               </div>
@@ -265,7 +323,10 @@ export default function JoinOrgPage() {
               {/* Password */}
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  {t("password_label", "Set Account Password")} *
+                  {isExistingAccount
+                    ? t("existing_account_password_label", "Existing Account Password")
+                    : t("password_label", "Set Account Password")}{" "}
+                  *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-stone-400">
@@ -277,7 +338,7 @@ export default function JoinOrgPage() {
                     disabled={isActivating}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder={isExistingAccount ? "Enter existing password" : "At least 6 characters"}
                     className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#8B1E2D] focus:border-transparent text-sm text-stone-900"
                   />
                   <button
@@ -303,7 +364,11 @@ export default function JoinOrgPage() {
                       <span>{t("activating", "Activating...")}</span>
                     </>
                   ) : (
-                    <span>{t("activate_account_btn", "Activate Account & Log In")}</span>
+                    <span>
+                      {isExistingAccount
+                        ? t("join_org_btn", "Join Organization")
+                        : t("activate_account_btn", "Activate Account & Log In")}
+                    </span>
                   )}
                 </button>
               </div>
