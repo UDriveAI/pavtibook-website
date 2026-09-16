@@ -1,0 +1,7 @@
+User-Agent: *
+Allow: /
+
+User-Agent: Google-adstxt
+Disallow:
+
+Sitemap: https://pavtibook.online/sitemap.xml
