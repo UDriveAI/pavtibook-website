@@ -286,7 +286,7 @@ export default function CreateReceiptPage() {
       const errMsg = err instanceof Error ? err.message : String(err);
 
       // F15: Free Tier Quota Gate Detection
-      if (errMsg.includes("FREE_RECEIPT_LIMIT_EXCEEDED") || errMsg.includes("25") || errMsg.includes("limit")) {
+      if (errMsg.includes("FREE_RECEIPT_LIMIT_EXCEEDED") || errMsg.includes("30") || errMsg.includes("25") || errMsg.includes("limit")) {
         setQuotaExceeded(true);
       } else {
         setFormError(errMsg || "Failed to create receipt. Please check your connection.");

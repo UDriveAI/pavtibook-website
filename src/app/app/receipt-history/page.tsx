@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from "firebase/firestore";
 import { useOrg } from "@/context/OrgContext";
 import { useLanguage } from "@/lib/i18n";
 import { db } from "@/lib/firebase-client";
 import { generateReceiptsCsv, downloadCsv } from "@/lib/receiptExport";
+import AdSlot from "@/components/ads/AdSlot";
 import {
   ArrowLeft,
   Search,
@@ -42,6 +43,7 @@ export default function ReceiptHistoryPage() {
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [plan, setPlan] = useState<string | null>(null);
 
   // Load Receipts for Active Organization
   useEffect(() => {
@@ -50,6 +52,18 @@ export default function ReceiptHistoryPage() {
     const fetchReceipts = async () => {
       setLoading(true);
       try {
+        // Fetch subscription plan for entitlement / ad eligibility
+        try {
+          const subSnap = await getDoc(doc(db, "subscriptions", activeOrg.id));
+          if (subSnap.exists()) {
+            setPlan(subSnap.data().plan || "free");
+          } else {
+            setPlan("free");
+          }
+        } catch {
+          setPlan("free");
+        }
+
         const receiptsRef = collection(db, "receipts");
         const q = query(
           receiptsRef,
@@ -382,6 +396,9 @@ export default function ReceiptHistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Non-intrusive ad slot for free tier */}
+      <AdSlot plan={plan} className="mt-6" />
     </div>
   );
 }

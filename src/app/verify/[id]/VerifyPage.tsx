@@ -398,9 +398,79 @@ export default function VerifyPage({ token, result }: Props) {
       )}
 
       {/* ============================================================ */}
-      {/* CASE 2: AUTHENTIC DIGITAL RECEIPT (VALID)                    */}
+      {/* CASE 2: PENDING SMART DONATION PAYMENT                       */}
       {/* ============================================================ */}
-      {isValid && (
+      {isValid && result.paymentStatus === "pending" && (
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "500px",
+            background: "#FFFFFF",
+            borderRadius: "16px",
+            boxShadow: "0 8px 30px rgba(217, 119, 6, 0.12)",
+            border: "2px solid #F59E0B",
+            overflow: "hidden",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "linear-gradient(135deg, #D97706 0%, #B45309 100%)",
+              color: "#FFFFFF",
+              padding: "32px 20px",
+            }}
+          >
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 16px",
+                fontSize: "32px",
+              }}
+            >
+              ⏳
+            </div>
+            <h1 style={{ fontSize: "22px", fontWeight: 800, margin: "0 0 6px", letterSpacing: "-0.01em" }}>
+              Payment Sent
+            </h1>
+            <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.9)", margin: 0, fontWeight: 500 }}>
+              Awaiting confirmation from the organization.
+            </p>
+          </div>
+
+          <div style={{ padding: "28px 24px", color: "#374151", lineHeight: 1.6 }}>
+            <p style={{ fontSize: "14px", margin: "0 0 14px", color: "#4B5563" }}>
+              Your donation of <strong>{formatAmount(result.amount)}</strong> has been initiated via UPI. The organization will manually verify this payment in their bank account before generating your digital receipt.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                marginTop: "16px",
+                padding: "12px 24px",
+                background: "#F59E0B",
+                color: "#FFFFFF",
+                border: "none",
+                borderRadius: "8px",
+                fontSize: "14px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              Check Payment Status
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* CASE 3: AUTHENTIC DIGITAL RECEIPT (VALID & PAID)             */}
+      {/* ============================================================ */}
+      {isValid && result.paymentStatus !== "pending" && (
         <div
           className="receipt-sheet"
           style={{

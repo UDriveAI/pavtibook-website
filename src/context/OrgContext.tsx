@@ -14,6 +14,7 @@ import {
   serverTimestamp,
   writeBatch,
   limit,
+  increment,
   DocumentSnapshot,
 } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
@@ -623,6 +624,24 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: "You are already an active member of this organization. Please log in directly." };
       }
 
+      // Check fresh status of invite
+      const inviteSnap = await getDoc(doc(db, "organization_invites", invite.id));
+      if (!inviteSnap.exists() || inviteSnap.data()?.status !== "pending") {
+        return { success: false, error: "This invitation is no longer valid or has already been used." };
+      }
+
+      // Check subscription seat limit
+      const subRef = doc(db, "subscriptions", invite.organizationId);
+      const subSnap = await getDoc(subRef);
+      if (subSnap.exists()) {
+        const subData = subSnap.data();
+        const currentUsed = Number(subData.usersUsed || 1);
+        const usersLimit = Number(subData.usersLimit || 1);
+        if (currentUsed >= usersLimit) {
+          return { success: false, error: `This organization has reached its maximum member limit (${usersLimit} seats). Please ask the administrator to upgrade their plan.` };
+        }
+      }
+
       // Batch write
       const batch = writeBatch(db);
 
@@ -675,6 +694,12 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
         action: "Member Activated",
         details: `Member ${targetName} (${targetEmail}) activated account as ${invite.role.toUpperCase()}`,
         timestamp: new Date().toISOString(),
+      });
+
+      // Item 5: Increment Subscriptions usersUsed
+      batch.update(subRef, {
+        usersUsed: increment(1),
+        updatedAt: new Date().toISOString(),
       });
 
       await batch.commit();

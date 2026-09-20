@@ -34,6 +34,8 @@ interface SubscriptionDoc {
   renewalDate?: string | null;
   receiptsUsed?: number;
   usersUsed?: number;
+  receiptUsageMonth?: string | null;
+  monthlyReceiptsUsed?: number;
 }
 
 interface SubscriptionHistoryItem {
@@ -417,17 +419,39 @@ export default function SubscriptionPage() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-neutral-100">
-            <div className="p-3 bg-neutral-50 rounded-2xl border border-neutral-200/60">
-              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">
-                {t("receipts_used_label")}
-              </span>
-              <span className="text-sm font-black text-neutral-900 mt-1 block">
-                {currentSub?.receiptLimit === null
-                  ? `${currentSub.receiptsUsed ?? 0} / Unlimited`
-                  : `${currentSub?.receiptsUsed ?? 0} / ${currentSub?.receiptLimit ?? 25}`}
-              </span>
-            </div>
+          {(() => {
+            const currentIndianMonth = new Intl.DateTimeFormat("en-CA", {
+              timeZone: "Asia/Kolkata",
+              year: "numeric",
+              month: "2-digit",
+            }).format(new Date());
+
+            const isUnlimited = currentSub?.receiptLimit === null;
+            const monthlyUsed = isUnlimited
+              ? 0
+              : currentSub?.receiptUsageMonth === currentIndianMonth
+              ? currentSub?.monthlyReceiptsUsed ?? 0
+              : 0;
+
+            const effectiveLimit = currentSub?.receiptLimit ?? 30;
+
+            return (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-neutral-100">
+                <div className="p-3 bg-neutral-50 rounded-2xl border border-neutral-200/60">
+                  <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">
+                    {t("receipts_used_label")} (This Month)
+                  </span>
+                  <span className="text-sm font-black text-neutral-900 mt-1 block">
+                    {isUnlimited
+                      ? `${currentSub?.receiptsUsed ?? 0} / Unlimited`
+                      : `${monthlyUsed} / ${effectiveLimit}`}
+                  </span>
+                  {!isUnlimited && (
+                    <span className="text-[9px] text-neutral-400 block mt-0.5">
+                      Resets 1st of month
+                    </span>
+                  )}
+                </div>
 
             <div className="p-3 bg-neutral-50 rounded-2xl border border-neutral-200/60">
               <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block">
@@ -456,7 +480,9 @@ export default function SubscriptionPage() {
               </span>
             </div>
           </div>
-        </div>
+        );
+      })()}
+      </div>
 
         {/* Pricing & Upgrade Options Grid */}
         <div className="space-y-4">
@@ -560,7 +586,7 @@ export default function SubscriptionPage() {
               <tbody className="divide-y divide-neutral-100">
                 <tr>
                   <td className="p-3 font-semibold">Receipt Generation Limit</td>
-                  <td className="p-3 text-center">25 Digital Receipts</td>
+                  <td className="p-3 text-center">30 Receipts / Month</td>
                   <td className="p-3 text-center text-emerald-700 font-bold">Unlimited</td>
                   <td className="p-3 text-center text-emerald-700 font-bold">Unlimited</td>
                 </tr>
@@ -572,9 +598,15 @@ export default function SubscriptionPage() {
                 </tr>
                 <tr>
                   <td className="p-3 font-semibold">PDF & JPG Downloads</td>
-                  <td className="p-3 text-center">Included (25)</td>
+                  <td className="p-3 text-center">Included (30 / mo)</td>
                   <td className="p-3 text-center text-emerald-700 font-bold">Unlimited</td>
                   <td className="p-3 text-center text-emerald-700 font-bold">Unlimited</td>
+                </tr>
+                <tr>
+                  <td className="p-3 font-semibold">Advertisements</td>
+                  <td className="p-3 text-center text-neutral-600">Non-intrusive Ads</td>
+                  <td className="p-3 text-center text-emerald-700 font-bold">Zero Ads (Ad-Free)</td>
+                  <td className="p-3 text-center text-emerald-700 font-bold">Zero Ads (Ad-Free)</td>
                 </tr>
                 <tr>
                   <td className="p-3 font-semibold">Manual WhatsApp Share Now</td>

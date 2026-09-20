@@ -221,16 +221,6 @@ export function useDashboardData() {
         const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const normalizedRole = (currentMembership?.role || "").trim().toLowerCase();
-        const isOwnerRole =
-          isOwner ||
-          normalizedRole === "admin" ||
-          normalizedRole === "owner" ||
-          normalizedRole === "president" ||
-          normalizedRole === "treasurer" ||
-          normalizedRole === "superadmin" ||
-          normalizedRole === "software_owner";
-
         let total = 0;
         let today = 0;
         let monthly = 0;
@@ -296,15 +286,6 @@ export function useDashboardData() {
           if (isDeleted) return;
           if (receipt.paymentStatus === "cancelled") return;
 
-          const createdByUid = receipt.createdBy || receipt.collectorId || "";
-          const collectorUid = receipt.collectorId || "";
-          const myUid = user?.uid || "";
-
-          // Member dashboard only aggregates member's own receipts
-          if (!isOwnerRole && createdByUid !== myUid && collectorUid !== myUid) {
-            return;
-          }
-
           const parsedDate = parseReceiptDateTime(receipt.createdAt);
           let isToday = false;
           let isMonth = false;
@@ -355,18 +336,8 @@ export function useDashboardData() {
 
         setAllReceipts(rawList);
 
-        // Recent 5 receipts scoped to user's permissions
-        const myUid = user?.uid || "";
-        const recent = rawList
-          .filter(
-            (r) =>
-              isOwner ||
-              isPresident ||
-              isTreasurer ||
-              r.createdBy === myUid ||
-              r.collectorId === myUid
-          )
-          .slice(0, 5);
+        // Recent 5 receipts for organization
+        const recent = rawList.slice(0, 5);
         setRecentReceipts(recent);
 
         // Member performance calculations for non-owners
@@ -374,6 +345,7 @@ export function useDashboardData() {
         let myMonthAmt = 0;
         let myTotalAmt = 0;
         let myPendingCount = 0;
+        const myUid = user?.uid || "";
 
         rawList.forEach((r) => {
           if (r.collectorId === myUid && r.paymentStatus !== "cancelled") {

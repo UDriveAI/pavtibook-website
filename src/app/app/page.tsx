@@ -2,12 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase-client";
 import { useAuth } from "../../context/AuthContext";
 import { useOrg } from "../../context/OrgContext";
 import { useCollector } from "../../context/CollectorContext";
 import { useLanguage } from "../../lib/i18n";
+import AdSlot from "@/components/ads/AdSlot";
 import {
   useDashboardData,
   parseReceiptDateTime,
@@ -36,6 +37,39 @@ export default function DashboardPage() {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [exportPeriod, setExportPeriod] = useState<string>("today");
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
+  const [subscription, setSubscription] = useState<{
+    plan?: string;
+    receiptLimit?: number | null;
+    monthlyReceiptsUsed?: number;
+    receiptsUsed?: number;
+    receiptUsageMonth?: string | null;
+    status?: string;
+  } | null>(null);
+
+  // Listen to organization subscription document
+  useEffect(() => {
+    if (!activeOrg?.id) {
+      setSubscription(null);
+      return;
+    }
+
+    const subRef = doc(db, "subscriptions", activeOrg.id);
+    const unsubscribe = onSnapshot(
+      subRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setSubscription(snapshot.data());
+        } else {
+          setSubscription({ plan: "free", receiptLimit: 30, receiptsUsed: 0 });
+        }
+      },
+      (err) => {
+        console.warn("[DASHBOARD] Subscription listener error:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [activeOrg?.id]);
 
   // Android Parity: Listen for pending change requests if user is Owner
   useEffect(() => {
@@ -58,6 +92,31 @@ export default function DashboardPage() {
 
     return () => unsubscribe();
   }, [activeOrg?.id, isOwner]);
+
+  // Indian calendar month string (Asia/Kolkata)
+  const currentIndianMonth = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date());
+
+  const isPaidPlan = Boolean(
+    subscription?.plan && (
+      subscription.plan.includes("professional") ||
+      subscription.plan.includes("premium") ||
+      subscription.plan === "monthly" ||
+      subscription.plan === "yearly"
+    )
+  );
+
+  const monthlyUsed = isPaidPlan
+    ? 0
+    : subscription?.receiptUsageMonth === currentIndianMonth
+    ? subscription?.monthlyReceiptsUsed ?? 0
+    : 0;
+
+  const receiptLimit = subscription?.receiptLimit ?? 30;
+  const quotaRatio = receiptLimit > 0 ? Math.min(monthlyUsed / receiptLimit, 1.0) : 0;
 
   const userName = userData?.name || user?.displayName || "";
   const greetingText = userName.trim().length > 0 ? `Namaste, ${userName}` : "Namaste";
@@ -185,6 +244,45 @@ export default function DashboardPage() {
           <span>{t("collector_mode")}</span>
         </button>
       </div>
+
+      {/* ── FREE TIER MONTHLY QUOTA TRACKER ── */}
+      {!isPaidPlan && (
+        <div className="bg-white rounded-2xl p-4 border border-black/5 shadow-xs space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs sm:text-sm font-bold text-[#2E1C0C]">
+                Free Plan: {monthlyUsed} / {receiptLimit} Receipts Used This Month
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                Resets 1st of month
+              </span>
+            </div>
+            <button
+              onClick={() => router.push("/app/subscription")}
+              className="text-xs font-bold text-[#8B1E2D] hover:underline cursor-pointer self-start sm:self-auto"
+            >
+              Upgrade Plan →
+            </button>
+          </div>
+          <div className="w-full bg-neutral-100 h-2 rounded-full overflow-hidden">
+            <div
+              className={`h-full transition-all duration-500 rounded-full ${
+                quotaRatio >= 0.9
+                  ? "bg-red-500"
+                  : quotaRatio >= 0.7
+                  ? "bg-orange-500"
+                  : "bg-emerald-500"
+              }`}
+              style={{ width: `${Math.round(quotaRatio * 100)}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-neutral-500">
+            {quotaRatio >= 1.0
+              ? "Monthly quota exhausted. Upgrade for unlimited receipts or wait until 1st of next month."
+              : "Includes 30 digital receipts every calendar month. Upgrade for zero ads & unlimited receipts."}
+          </p>
+        </div>
+      )}
 
       {/* ── ARCHIVED BANNER (Parity with Android read-only notice) ── */}
       {Boolean(activeOrg?.isArchived) && (
@@ -859,6 +957,11 @@ export default function DashboardPage() {
           />
         </svg>
       </div>
+
+      {/* ── NON-INTRUSIVE AD SLOT (Strictly Suppressed for Paid Subscribers & Loading State) ── */}
+      {subscription && subscription.plan && (
+        <AdSlot plan={subscription.plan} />
+      )}
 
       {/* ── RECENT RECEIPTS SECTION (Last 5) ── */}
       <div className="space-y-3">

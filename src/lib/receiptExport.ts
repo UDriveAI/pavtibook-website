@@ -114,6 +114,7 @@ export function buildWhatsAppShareUrl(options: {
     purpose: string;
     createdAt: string;
     id?: string;
+    paymentStatus?: string;
   };
   orgName: string;
   languageCode?: string;
@@ -128,45 +129,85 @@ export function buildWhatsAppShareUrl(options: {
   const amountStr = Math.floor(receipt.amount).toString();
   const cleanDonorName = receipt.donorName?.trim();
   const hasReceiptUrl = Boolean(receiptPublicUrl && receiptPublicUrl.trim());
+  const isPending = (receipt.paymentStatus || "").toLowerCase().trim() === "pending";
 
   let message = "";
   if (code === "hi") {
     const donorGreeting = cleanDonorName || "दानदाता";
     const urlLine = hasReceiptUrl ? `\n🔗 डिजिटल रसीद देखें: ${receiptPublicUrl?.trim()}\n` : "";
-    message =
-      `🙏 नमस्कार ${donorGreeting}\n\n` +
-      `आपका ₹${amountStr} का दान सफलतापूर्वक प्राप्त हुआ है।\n\n` +
-      `🧾 रसीद क्र. / Receipt No: ${receipt.receiptNumber}\n` +
-      `🏛 संस्था / Organization: ${orgName}\n` +
-      `🌸 उद्देश्य / Purpose: ${receipt.purpose}\n` +
-      `📅 दिनांक / Date: ${formattedDate}\n` +
-      `${urlLine}\n` +
-      `धन्यवाद!\n— PavtiBook`;
+    if (isPending) {
+      message =
+        `🙏 नमस्कार ${donorGreeting}\n\n` +
+        `आपकी दान राशि दर्ज की गई है। भुगतान अभी लंबित है।\n\n` +
+        `🧾 रसीद क्र. / Receipt No: ${receipt.receiptNumber}\n` +
+        `🏛 संस्था / Organization: ${orgName}\n` +
+        `🌸 उद्देश्य / Purpose: ${receipt.purpose}\n` +
+        `💰 राशि / Amount: ₹${amountStr}\n` +
+        `📅 दिनांक / Date: ${formattedDate}\n` +
+        `${urlLine}\n` +
+        `धन्यवाद!\n— PavtiBook`;
+    } else {
+      message =
+        `🙏 नमस्कार ${donorGreeting}\n\n` +
+        `आपका ₹${amountStr} का दान सफलतापूर्वक प्राप्त हुआ है।\n\n` +
+        `🧾 रसीद क्र. / Receipt No: ${receipt.receiptNumber}\n` +
+        `🏛 संस्था / Organization: ${orgName}\n` +
+        `🌸 उद्देश्य / Purpose: ${receipt.purpose}\n` +
+        `📅 दिनांक / Date: ${formattedDate}\n` +
+        `${urlLine}\n` +
+        `धन्यवाद!\n— PavtiBook`;
+    }
   } else if (code === "en") {
     const donorGreeting = cleanDonorName || "Donor";
     const urlLine = hasReceiptUrl ? `\n🔗 View Digital Receipt: ${receiptPublicUrl?.trim()}\n` : "";
-    message =
-      `🙏 Hello ${donorGreeting},\n\n` +
-      `Your contribution of ₹${amountStr} has been received successfully.\n\n` +
-      `🧾 Receipt No: ${receipt.receiptNumber}\n` +
-      `🏛 Organization: ${orgName}\n` +
-      `🌸 Purpose: ${receipt.purpose}\n` +
-      `📅 Date: ${formattedDate}\n` +
-      `${urlLine}\n` +
-      `Thank you!\n— PavtiBook`;
+    if (isPending) {
+      message =
+        `🙏 Hello ${donorGreeting},\n\n` +
+        `Your contribution has been recorded. Payment is currently pending.\n\n` +
+        `🧾 Receipt No: ${receipt.receiptNumber}\n` +
+        `🏛 Organization: ${orgName}\n` +
+        `🌸 Purpose: ${receipt.purpose}\n` +
+        `💰 Amount: ₹${amountStr}\n` +
+        `📅 Date: ${formattedDate}\n` +
+        `${urlLine}\n` +
+        `Thank you!\n— PavtiBook`;
+    } else {
+      message =
+        `🙏 Hello ${donorGreeting},\n\n` +
+        `Your contribution of ₹${amountStr} has been received successfully.\n\n` +
+        `🧾 Receipt No: ${receipt.receiptNumber}\n` +
+        `🏛 Organization: ${orgName}\n` +
+        `🌸 Purpose: ${receipt.purpose}\n` +
+        `📅 Date: ${formattedDate}\n` +
+        `${urlLine}\n` +
+        `Thank you!\n— PavtiBook`;
+    }
   } else {
     // Default Marathi ('mr')
     const donorGreeting = cleanDonorName || "देणगीदार";
     const urlLine = hasReceiptUrl ? `\n🔗 डिजिटल पावती पहा: ${receiptPublicUrl?.trim()}\n` : "";
-    message =
-      `🙏 नमस्कार ${donorGreeting}\n\n` +
-      `आपली ₹${amountStr} वर्गणी यशस्वीरित्या प्राप्त झाली आहे.\n\n` +
-      `🧾 पावती क्र. / Receipt No: ${receipt.receiptNumber}\n` +
-      `🏛 संस्था / Organization: ${orgName}\n` +
-      `🌸 कारण / Purpose: ${receipt.purpose}\n` +
-      `📅 दिनांक / Date: ${formattedDate}\n` +
-      `${urlLine}\n` +
-      `धन्यवाद.\n— PavtiBook`;
+    if (isPending) {
+      message =
+        `🙏 नमस्कार ${donorGreeting}\n\n` +
+        `आपली वर्गणी नोंदवण्यात आली आहे. देयक अद्याप प्रलंबित आहे.\n\n` +
+        `🧾 पावती क्र. / Receipt No: ${receipt.receiptNumber}\n` +
+        `🏛 संस्था / Organization: ${orgName}\n` +
+        `🌸 कारण / Purpose: ${receipt.purpose}\n` +
+        `💰 रक्कम / Amount: ₹${amountStr}\n` +
+        `📅 दिनांक / Date: ${formattedDate}\n` +
+        `${urlLine}\n` +
+        `धन्यवाद.\n— PavtiBook`;
+    } else {
+      message =
+        `🙏 नमस्कार ${donorGreeting}\n\n` +
+        `आपली ₹${amountStr} वर्गणी यशस्वीरित्या प्राप्त झाली आहे.\n\n` +
+        `🧾 पावती क्र. / Receipt No: ${receipt.receiptNumber}\n` +
+        `🏛 संस्था / Organization: ${orgName}\n` +
+        `🌸 कारण / Purpose: ${receipt.purpose}\n` +
+        `📅 दिनांक / Date: ${formattedDate}\n` +
+        `${urlLine}\n` +
+        `धन्यवाद.\n— PavtiBook`;
+    }
   }
 
   // Format mobile to international digits

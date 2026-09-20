@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useOrg } from "@/context/OrgContext";
 import { useLanguage } from "@/lib/i18n";
-import { db } from "@/lib/firebase-client";
+import { db, functions } from "@/lib/firebase-client";
+import { httpsCallable } from "firebase/functions";
 import {
   collection,
   query,
@@ -48,6 +49,7 @@ interface MemberDoc {
   mobile: string;
   email?: string;
   role: string;
+  status?: string;
   joinedAt?: string;
   createdAt?: unknown;
   profilePhotoUrl?: string;
@@ -218,17 +220,18 @@ export default function TeamManagementPage() {
       // 4. Fetch subscription info
       try {
         const subSnap = await getDoc(doc(db, "subscriptions", activeOrg.id));
+        const activeMembersCount = loadedMembers.filter((m) => (m.status || "active") === "active").length;
         if (subSnap.exists()) {
           const subData = subSnap.data();
           setSubscription({
             usersLimit: Number(subData.usersLimit || 1),
-            usersUsed: Number(subData.usersUsed || loadedMembers.length || 1),
+            usersUsed: Math.max(Number(subData.usersUsed || 1), Math.max(1, activeMembersCount)),
             plan: subData.plan || "free",
           });
         } else {
           setSubscription({
             usersLimit: 1,
-            usersUsed: loadedMembers.length || 1,
+            usersUsed: Math.max(1, activeMembersCount),
             plan: "free",
           });
         }
@@ -630,38 +633,11 @@ export default function TeamManagementPage() {
 
     setRemoving(true);
     try {
-      await runTransaction(db, async (tx) => {
-        const memberRef = doc(db, "organization_members", removeTarget.id);
-        const userRef = doc(db, "users", removeTarget.userId);
-        const subRef = doc(db, "subscriptions", activeOrg.id);
-
-        const subSnap = await tx.get(subRef);
-
-        tx.delete(memberRef);
-        tx.update(userRef, {
-          is_active: false,
-          isActive: false,
-          organization_id: null,
-          organizationId: null,
-        });
-
-        if (subSnap.exists()) {
-          const currentUsed = Number(subSnap.data().usersUsed || 1);
-          tx.update(subRef, {
-            usersUsed: Math.max(1, currentUsed - 1),
-            updatedAt: serverTimestamp(),
-          });
-        }
-      });
-
-      await addDoc(collection(db, "activity_logs"), {
+      const removeMemberFn = httpsCallable(functions, "removeOrganizationMember");
+      await removeMemberFn({
         organizationId: activeOrg.id,
-        userId: user.uid,
-        userName: userData?.name || user?.displayName || "Admin",
-        userRole: activeRole || "owner",
-        action: "Member Removed",
-        details: `Removed ${removeTarget.name} from organization`,
-        timestamp: new Date().toISOString(),
+        memberDocId: removeTarget.id,
+        targetUserId: removeTarget.userId,
       });
 
       setRemoveTarget(null);

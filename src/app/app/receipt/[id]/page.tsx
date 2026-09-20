@@ -56,6 +56,13 @@ export default function ReceiptDetailsPage() {
   const [changeError, setChangeError] = useState<string | null>(null);
   const [changeSuccess, setChangeSuccess] = useState(false);
 
+  // Payment Confirmation State
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmMethod, setConfirmMethod] = useState("cash");
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [confirmSuccess, setConfirmSuccess] = useState(false);
+
   // Export Action State
   const [isExporting, setIsExporting] = useState(false);
 
@@ -232,12 +239,90 @@ export default function ReceiptDetailsPage() {
         purpose: receipt.purpose,
         createdAt: receipt.createdAt,
         id: receipt.id,
+        paymentStatus: receipt.paymentStatus,
       },
       orgName: activeOrg?.name || "Organization",
       languageCode: receipt.languageCode || (activeOrg as { languageCode?: string })?.languageCode || language || "mr",
       receiptPublicUrl: `https://pavtibook.online/receipt/${receipt.id}`,
     });
     window.open(url, "_blank");
+  };
+
+  // Payment Confirmation via confirmPayment Cloud Function
+  const handleConfirmPayment = async () => {
+    if (!receipt?.id) return;
+    setIsConfirming(true);
+    setConfirmError(null);
+
+    try {
+      if (canSoftDelete) {
+        // Owner / Admin / President / Treasurer: direct confirmPayment callable
+        const confirmFn = httpsCallable<
+          { receiptId: string; paymentMethod: string; transactionRef: string },
+          { success: boolean; message?: string; alreadyPaid?: boolean }
+        >(functions, "confirmPayment");
+
+        const res = await confirmFn({
+          receiptId: receipt.id,
+          paymentMethod: confirmMethod,
+          transactionRef: "MANUAL-RECONCILED",
+        });
+
+        if (res.data.success) {
+          setReceipt((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  paymentStatus: "paid",
+                  paymentMode: confirmMethod,
+                }
+              : null
+          );
+          setConfirmSuccess(true);
+          setTimeout(() => {
+            setShowConfirmModal(false);
+            setConfirmSuccess(false);
+          }, 1500);
+        } else {
+          setConfirmError(res.data.message || "Failed to confirm payment on server.");
+        }
+      } else {
+        // Member / Collector: submit change request
+        const submitChangeFn = httpsCallable<
+          {
+            targetType: string;
+            targetId: string;
+            requestedAction: string;
+            proposedValues: Record<string, unknown>;
+            requestReason: string;
+          },
+          { success: boolean }
+        >(functions, "submitChangeRequest");
+
+        await submitChangeFn({
+          targetType: "receipt",
+          targetId: receipt.id,
+          requestedAction: "CONFIRM_PAYMENT",
+          proposedValues: {
+            paymentStatus: "paid",
+            paymentMode: confirmMethod,
+          },
+          requestReason: `Payment collected via ${confirmMethod.toUpperCase()}`,
+        });
+
+        setConfirmSuccess(true);
+        setTimeout(() => {
+          setShowConfirmModal(false);
+          setConfirmSuccess(false);
+        }, 1500);
+      }
+    } catch (err: unknown) {
+      console.error("Payment confirmation error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setConfirmError(msg || "Failed to confirm payment on server.");
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   // F21: Soft Delete Receipt via Cloud Function softDeleteReceipt
@@ -456,6 +541,21 @@ export default function ReceiptDetailsPage() {
             <Printer className="w-4 h-4" />
           </button>
 
+          {/* Confirm Payment button for pending receipts */}
+          {!receipt.isDeleted && receipt.paymentStatus === "pending" && (
+            <button
+              onClick={() => setShowConfirmModal(true)}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>
+                {canSoftDelete
+                  ? t("confirm_payment", "पेमेंट पुष्टी (Confirm Payment)")
+                  : t("request_confirm_payment", "पेमेंट मंजुरी विनंती (Request Confirmation)")}
+              </span>
+            </button>
+          )}
+
           {/* F21: Soft Delete (Owner/Officer) or F22: Change Request (Member) */}
           {!receipt.isDeleted && (
             <>
@@ -671,6 +771,98 @@ export default function ReceiptDetailsPage() {
               </>
             )}
           </form>
+        </div>
+      )}
+
+      {/* Payment Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full space-y-4 shadow-2xl border border-stone-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#8B1E2D] font-bold">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-base font-black text-stone-900">
+                  {canSoftDelete
+                    ? t("confirm_payment_title", "पेमेंट पुष्टी (Confirm Payment)")
+                    : t("request_payment_title", "पेमेंट मंजुरी विनंती (Request Confirmation)")}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="p-1 text-stone-400 hover:text-stone-600 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-600">
+              {canSoftDelete
+                ? `पावती क्र. ${receipt.receiptNumber} साठी ₹${receipt.amount.toLocaleString("en-IN")} चे देयक जमा झाल्याची पुष्टी करा.`
+                : `पावती क्र. ${receipt.receiptNumber} साठी ₹${receipt.amount.toLocaleString("en-IN")} चे देयक जमा झाले असल्यास मालकाकडे मंजुरीची विनंती पाठवा.`}
+            </p>
+
+            {confirmSuccess ? (
+              <div className="p-4 bg-emerald-50 text-emerald-800 rounded-2xl flex items-center gap-2 text-xs font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>
+                  {canSoftDelete
+                    ? "Payment confirmed successfully! Receipt marked as PAID."
+                    : "Payment confirmation request submitted to Owner!"}
+                </span>
+              </div>
+            ) : (
+              <>
+                {confirmError && (
+                  <p className="text-xs text-red-600 font-semibold">{confirmError}</p>
+                )}
+
+                <div className="space-y-3 text-xs">
+                  <div className="space-y-1">
+                    <label className="block font-bold text-stone-700">
+                      {t("select_payment_mode", "पेमेंट पद्धत निवडा (Payment Method)")}
+                    </label>
+                    <select
+                      value={confirmMethod}
+                      onChange={(e) => setConfirmMethod(e.target.value)}
+                      className="w-full px-3 py-2 border border-stone-300 rounded-xl focus:ring-2 focus:ring-[#8B1E2D] focus:outline-none bg-white font-medium"
+                    >
+                      <option value="cash">{t("cash", "रोख रक्कम (Cash)")}</option>
+                      <option value="upi">{t("upi", "UPI / QR Code")}</option>
+                      <option value="bank">{t("bank", "बँक हस्तांतरण (Bank Transfer)")}</option>
+                      <option value="cheque">{t("cheque", "धनादेश (Cheque)")}</option>
+                      <option value="other">{t("other", "इतर (Other)")}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmModal(false)}
+                    className="px-4 py-2 text-xs font-bold text-stone-600 hover:bg-stone-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmPayment}
+                    disabled={isConfirming}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs disabled:opacity-50 transition flex items-center gap-1.5"
+                  >
+                    {isConfirming ? (
+                      <span>Processing...</span>
+                    ) : (
+                      <span>
+                        {canSoftDelete
+                          ? t("confirm_paid_btn", "पेमेंट पुष्टी करा (Mark as PAID)")
+                          : t("submit_request_btn", "विनंती पाठवा (Send Request)")}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>

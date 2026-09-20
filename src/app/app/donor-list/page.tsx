@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { collection, query, where, getDocs, limit } from "firebase/firestore";
+import { collection, query, where, getDocs, limit, doc, getDoc } from "firebase/firestore";
 import { useOrg } from "@/context/OrgContext";
 import { useLanguage } from "@/lib/i18n";
 import { db } from "@/lib/firebase-client";
+import AdSlot from "@/components/ads/AdSlot";
 import {
   ArrowLeft,
   Search,
@@ -34,6 +35,7 @@ export default function DonorListPage() {
   const [donors, setDonors] = useState<DonorRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [plan, setPlan] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeOrg?.id) return;
@@ -41,6 +43,18 @@ export default function DonorListPage() {
     const fetchDonors = async () => {
       setLoading(true);
       try {
+        // Fetch subscription plan for ad eligibility
+        try {
+          const subSnap = await getDoc(doc(db, "subscriptions", activeOrg.id));
+          if (subSnap.exists()) {
+            setPlan(subSnap.data().plan || "free");
+          } else {
+            setPlan("free");
+          }
+        } catch {
+          setPlan("free");
+        }
+
         const donorsRef = collection(db, "donors");
         const q = query(
           donorsRef,
@@ -192,6 +206,9 @@ export default function DonorListPage() {
           ))}
         </div>
       )}
+
+      {/* Non-intrusive ad slot for free tier */}
+      <AdSlot plan={plan} className="mt-6" />
     </div>
   );
 }
