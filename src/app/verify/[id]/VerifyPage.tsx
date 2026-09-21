@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 
 interface VerificationResult {
   isValid: boolean;
@@ -224,6 +224,18 @@ function convertNumberToWords(num: number, lang: string = "mr"): string {
 }
 
 export default function VerifyPage({ token, result }: Props) {
+  // Hide WhatsApp floating widgets
+  useEffect(() => {
+    const hideWidgets = () => {
+      const widget = document.getElementById("wa-widget");
+      if (widget) widget.style.display = "none";
+      const efaWidget = document.querySelector(".elfsight-app-whatsapp-chat");
+      if (efaWidget) (efaWidget).style.display = "none";
+    };
+    hideWidgets();
+    const timeoutId = setTimeout(hideWidgets, 1500);
+    return () => clearTimeout(timeoutId);
+  }, []);
   const isDeleted = result.isDeleted === true;
   const isValid = result.isValid === true && !isDeleted;
   const isError = result.error === true;
