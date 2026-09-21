@@ -136,7 +136,7 @@ export async function POST(request: Request) {
         userName: "Smart QR Donor",
         userRole: "Donor",
         action: "Donation Initiated",
-        details: `Smart Donation QR Receipt ${receiptNumber} generated for â‚¹${amount} (Pending)`,
+        details: `Smart Donation QR Receipt ${receiptNumber} generated for ₹${amount} (Pending)`,
         timestamp: nowIso,
       });
 

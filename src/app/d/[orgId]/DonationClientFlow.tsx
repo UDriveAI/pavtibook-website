@@ -130,14 +130,14 @@ export default function DonationClientFlow({
                     : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200"
                 }`}
               >
-                â‚¹{amt}
+                ₹{amt}
               </button>
             ))}
           </div>
 
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <span className="text-gray-500 font-bold text-xl">â‚¹</span>
+              <span className="text-gray-500 font-bold text-xl">₹</span>
             </div>
             <input
               type="number"
@@ -194,7 +194,7 @@ export default function DonationClientFlow({
               Initiating...
             </>
           ) : (
-            `Donate â‚¹${amount || "..."}`
+            `Donate ₹${amount || "..."}`
           )}
         </button>
         
