@@ -405,19 +405,20 @@ export default function VerifyPage({ token, result }: Props) {
           style={{
             width: "100%",
             maxWidth: "500px",
-            background: "#FFFFFF",
+            background: "#FFFDF9",
             borderRadius: "16px",
-            boxShadow: "0 8px 30px rgba(217, 119, 6, 0.12)",
-            border: "2px solid #F59E0B",
+            boxShadow: "0 8px 30px rgba(139, 30, 45, 0.08)",
+            border: "1px solid rgba(139, 30, 45, 0.15)",
             overflow: "hidden",
             textAlign: "center",
           }}
         >
           <div
             style={{
-              background: "linear-gradient(135deg, #D97706 0%, #B45309 100%)",
+              background: "#8B1E2D",
               color: "#FFFFFF",
-              padding: "32px 20px",
+              padding: "36px 20px 28px",
+              position: "relative",
             }}
           >
             <div
@@ -425,44 +426,53 @@ export default function VerifyPage({ token, result }: Props) {
                 width: "64px",
                 height: "64px",
                 borderRadius: "50%",
-                background: "rgba(255, 255, 255, 0.2)",
+                background: "#FFFDF9",
+                border: "2px solid #F47C20",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 margin: "0 auto 16px",
-                fontSize: "32px",
+                fontSize: "28px",
+                boxShadow: "0 4px 12px rgba(244, 124, 32, 0.3)",
               }}
             >
               ⏳
             </div>
-            <h1 style={{ fontSize: "22px", fontWeight: 800, margin: "0 0 6px", letterSpacing: "-0.01em" }}>
-              Payment Sent
+            <h1 style={{ fontSize: "24px", fontWeight: 900, margin: "0 0 8px", letterSpacing: "-0.01em" }}>
+              Payment Status
             </h1>
-            <p style={{ fontSize: "14px", color: "rgba(255,255,255,0.9)", margin: 0, fontWeight: 500 }}>
-              Awaiting confirmation from the organization.
+            <p style={{ fontSize: "15px", color: "#FFFDF9", opacity: 0.9, margin: 0, fontWeight: 500 }}>
+              Your payment is being confirmed.
             </p>
+            {/* Subtle bottom border accent */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: "4px", background: "linear-gradient(to right, #F47C20, #F2C94C)" }}></div>
           </div>
 
-          <div style={{ padding: "28px 24px", color: "#374151", lineHeight: 1.6 }}>
-            <p style={{ fontSize: "14px", margin: "0 0 14px", color: "#4B5563" }}>
-              Your donation of <strong>{formatAmount(result.amount)}</strong> has been initiated via UPI. The organization will manually verify this payment in their bank account before generating your digital receipt.
+          <div style={{ padding: "32px 24px", color: "#374151", lineHeight: 1.6 }}>
+            <p style={{ fontSize: "15px", margin: "0 0 24px", color: "#4B5563" }}>
+              Your donation of <strong style={{ color: "#8B1E2D", fontSize: "16px" }}>{formatAmount(result.amount)}</strong> has been initiated. The status will update once the payment is confirmed by the organization.
             </p>
             <button
               onClick={() => window.location.reload()}
               style={{
-                marginTop: "16px",
-                padding: "12px 24px",
-                background: "#F59E0B",
+                width: "100%",
+                padding: "14px 24px",
+                background: "#8B1E2D",
                 color: "#FFFFFF",
                 border: "none",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontWeight: 700,
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: 800,
                 cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(139, 30, 45, 0.3)",
+                transition: "all 0.2s ease-in-out",
               }}
             >
               Check Payment Status
             </button>
+            <p style={{ fontSize: "12px", color: "#9CA3AF", marginTop: "16px", marginBottom: 0 }}>
+              You may refresh this page to check for updates.
+            </p>
           </div>
         </div>
       )}
@@ -969,9 +979,9 @@ export default function VerifyPage({ token, result }: Props) {
 
       {/* Subtle Footer (no-print) */}
       <div className="no-print" style={{ textAlign: "center", marginTop: "24px" }}>
-        <p style={{ fontSize: "11px", color: "#9CA3AF", margin: 0 }}>
-          Powered by <strong style={{ color: "#8B1E2D" }}>PavtiBook</strong> · India&apos;s #1 Digital Receipt Platform
-        </p>
+          <p style={{ fontSize: "11px", color: "#9CA3AF", margin: 0 }}>
+            Powered by <strong style={{ color: "#8B1E2D" }}>PavtiBook</strong> &bull; Digital Pavti
+          </p>
       </div>
     </div>
   );

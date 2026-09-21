@@ -55,6 +55,11 @@ export default function DonationClientFlow({
       return;
     }
 
+    if (!donorMobile || !/^[0-9]{10}$/.test(donorMobile)) {
+      setError("Valid 10-digit mobile number is required.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -214,10 +219,7 @@ export default function DonationClientFlow({
           {/* Donor Details Section */}
           <div className="bg-white p-5 rounded-2xl shadow-[0_2px_10px_rgba(0,0,0,0.03)] border border-[#8B1E2D]/10 space-y-4">
             <label className="block text-sm font-bold text-gray-800 mb-2">
-              Donor Details{" "}
-              <span className="text-gray-400 font-normal text-xs ml-1">
-                (Optional)
-              </span>
+              Donor Details
             </label>
 
             <div>
@@ -225,7 +227,7 @@ export default function DonationClientFlow({
                 type="text"
                 value={donorName}
                 onChange={(e) => setDonorName(e.target.value)}
-                placeholder="Your Full Name"
+                placeholder="Full Name (Optional)"
                 className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/10 focus:border-[#F47C20] transition-colors placeholder:font-normal"
               />
             </div>
@@ -233,8 +235,10 @@ export default function DonationClientFlow({
               <input
                 type="tel"
                 value={donorMobile}
-                onChange={(e) => setDonorMobile(e.target.value)}
-                placeholder="Mobile Number"
+                onChange={(e) => setDonorMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="Mobile Number *"
+                required
+                pattern="[0-9]{10}"
                 className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/10 focus:border-[#F47C20] transition-colors placeholder:font-normal"
               />
             </div>

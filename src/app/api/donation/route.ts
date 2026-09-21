@@ -14,6 +14,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid parameters" }, { status: 400 });
     }
 
+    if (!donorMobile || !/^[0-9]{10}$/.test(donorMobile)) {
+      return NextResponse.json({ error: "Valid 10-digit mobile number is required" }, { status: 400 });
+    }
+
     const orgRef = db.collection("organizations").doc(orgId);
     const subRef = db.collection("subscriptions").doc(orgId);
 
