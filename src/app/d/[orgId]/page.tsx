@@ -35,7 +35,7 @@ export default async function SmartDonationPage({ params }: Props) {
 
   if (!db) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#FFFDF9] flex items-center justify-center p-6 text-center">
         <div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">System Error</h2>
           <p className="text-gray-500">Database connection not initialized.</p>
@@ -61,7 +61,7 @@ export default async function SmartDonationPage({ params }: Props) {
 
     if (!isActivated || !upiId) {
       return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 text-center">
+        <div className="min-h-screen bg-[#FFFDF9] flex items-center justify-center p-6 text-center">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 max-w-sm w-full">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="text-2xl">ðŸš«</span>
@@ -76,7 +76,7 @@ export default async function SmartDonationPage({ params }: Props) {
     }
 
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-[#FFFDF9]">
         <DonationClientFlow 
           orgId={orgId}
           orgName={orgData.name || orgData.orgName || "Organization"}
@@ -90,7 +90,7 @@ export default async function SmartDonationPage({ params }: Props) {
   } catch (error) {
     console.error("Error loading Smart Donation page:", error);
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6 text-center">
+      <div className="min-h-screen bg-[#FFFDF9] flex items-center justify-center p-6 text-center">
         <div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h2>
           <p className="text-gray-500 text-sm">Please try scanning the QR code again.</p>
