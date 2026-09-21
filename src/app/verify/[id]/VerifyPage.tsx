@@ -230,7 +230,7 @@ export default function VerifyPage({ token, result }: Props) {
       const widget = document.getElementById("wa-widget");
       if (widget) widget.style.display = "none";
       const efaWidget = document.querySelector(".elfsight-app-whatsapp-chat");
-      if (efaWidget) (efaWidget).style.display = "none";
+      if (efaWidget) (efaWidget as HTMLElement).style.display = "none";
     };
     hideWidgets();
     const timeoutId = setTimeout(hideWidgets, 1500);
