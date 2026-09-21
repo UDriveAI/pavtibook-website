@@ -13,27 +13,29 @@ import { getFirestore, Firestore } from "firebase-admin/firestore";
 let firestoreDb: Firestore | null = null;
 
 if (!getApps().length) {
+  const saJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   const projectId = process.env.FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   let privateKey = process.env.FIREBASE_PRIVATE_KEY;
 
-  if (!projectId || !clientEmail || !privateKey) {
+  if (!saJson && (!projectId || !clientEmail || !privateKey)) {
     console.warn("Firebase Server Credentials Missing: Form submissions will not be saved to Firestore until config is set.");
   } else {
     try {
-      // Support double-encoded newline characters in private key strings
-      if (privateKey.includes("\\n")) {
-        privateKey = privateKey.replace(/\\n/g, "\n");
+      let credential;
+      if (saJson) {
+        credential = cert(JSON.parse(saJson));
+      } else if (projectId && clientEmail && privateKey) {
+        if (privateKey.includes("\\n")) {
+          privateKey = privateKey.replace(/\\n/g, "\n");
+        }
+        credential = cert({ projectId, clientEmail, privateKey });
       }
 
-      initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-      });
-      console.log("Firebase Admin SDK modular singleton initialized successfully.");
+      if (credential) {
+        initializeApp({ credential });
+        console.log("Firebase Admin SDK modular singleton initialized successfully.");
+      }
     } catch (error) {
       console.error("Firebase Admin SDK initialization failed:", error);
     }
